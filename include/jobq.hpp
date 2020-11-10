@@ -11,6 +11,7 @@
 #include <tuple>
 #include <typeindex>
 #include <stop_token>
+#include <tuple>
 
 #include "include/traits.hpp"
 #include "include/task_queue.hpp"
@@ -18,10 +19,19 @@
 #include "include/task_type.hpp"
 #include "include/statistics.hpp"
 #include "include/scheduler.hpp"
+#include "include/util.hpp"
 
 namespace thp {
 
 class threadpool;
+
+template<typename> struct is_tuple : std::false_type {};
+template<typename... T> struct is_tuple<std::tuple<T...>> : std::true_type {};
+
+
+template<typename T1, typename T2, typename = std::enable_if_t<
+  is_tuple<T1>::value && is_tuple<T2>::value>>
+static decltype(auto) operator + (T1&& t1, T2&& t2) { return std::tuple_cat(std::forward<T1>(t1), std::forward<T2>(t2)); }
 
 struct jobq_stopped_ex final : std::exception {
   const char *what() const noexcept override { return "jobq_stopped_ex"; }
@@ -35,39 +45,67 @@ class job_queue {
 public:
   explicit job_queue();
 
+  template <typename TT>
+  constexpr decltype(auto) insert_task(TT &&t) {
+    using T = std::decay_t<TT>;
+    if constexpr (traits::is_smart_ptr<T>::value) {
+      using TaskType = typename T::element_type;
+      auto fut = t->future();
+      taskq_for<TaskType>().put(std::forward<T>(t));
+      return fut;
+    }
+    else if constexpr (traits::is_container<std::decay_t<T>>::value) {
+      using P = typename T::value_type;
+      using TaskType = typename P::element_type;
+      using ReturnType = typename TaskType::ReturnType;
+
+      static_assert(traits::is_smart_ptr<P>::value && std::is_base_of_v<task, TaskType>);
+
+      check_stop();
+      auto N = t.size();
+      std::vector<std::future<ReturnType>> futs;
+      futs.reserve(N);
+      std::transform(t.begin(), t.end(), std::back_inserter(futs),
+                    [](auto&& w) { return w->future(); });
+    
+      taskq_for<TaskType>().insert(std::make_move_iterator(t.begin()),
+                                 std::make_move_iterator(t.end()));
+      num_tasks_ += N;
+      util::notify<N>(cond_full_);
+      return futs;
+    }
+    else
+      static_assert("type not supported");
+  }
+
   template<typename InputIter>
-  constexpr decltype(auto) insert(InputIter s, InputIter e) {
+  constexpr decltype(auto) insert_task(InputIter s, InputIter e) {
     using TaskType = std::iterator_traits<InputIter>::value_type::element_type;
+    using ReturnType = typename TaskType::ReturnType;
 
     check_stop();
-    const auto n = std::distance(s, e);
+    constexpr auto N = std::distance(s, e);
+    std::vector<std::future<ReturnType>> futs;
+    futs.reserve(N);
+    std::transform(s, e, std::back_inserter(futs),
+                    [](auto&& t) { return t->future(); });
     taskq_for<TaskType>().insert(std::make_move_iterator(s),
                                  std::make_move_iterator(e));
-    num_tasks_ += n;
-    cond_full_.notify_all();
+    num_tasks_ += N;
+    util::notify<N>(cond_full_);
+    return futs;
   }
 
-  template <typename C, typename = std::enable_if_t<
-                            traits::is_container<std::decay_t<C>>::value>>
-  constexpr decltype(auto) insert(C&& tasks) {
-    using TaskType = typename C::value_type::element_type;
 
-    check_stop();
-    const auto n = tasks.size();
-    taskq_for<TaskType>().insert(std::make_move_iterator(tasks.begin()),
-                                 std::make_move_iterator(tasks.end()));
-    num_tasks_ += n;
-    cond_full_.notify_all();
+  template <typename... Args>
+  constexpr decltype(auto) insert(Args&&... args) {
+    auto futs = (std::make_tuple() + ... + std::make_tuple(insert_task(std::forward<Args>(args))));
+    constexpr auto N = std::tuple_size_v<decltype(futs)>;
+    num_tasks_ += N;
+    util::notify<N>(cond_full_);
+    return futs;
   }
-
-  template <typename T>
-  constexpr decltype(auto) insert_task(T &&t) {
-    using TaskType = typename T::element_type;
-    static_assert(traits::is_smart_ptr<T>::value && std::is_base_of_v<task, TaskType>);
-    taskq_for<TaskType>().put(std::forward<T>(t));
-    return true;
-  }
-
+#if 0
   template <typename... Args>
   constexpr decltype(auto) insert(std::tuple<Args...>&& tasks) {
     check_stop();
@@ -80,6 +118,7 @@ public:
     num_tasks_ += std::tuple_size_v<decltype(tup)>;
     cond_full_.notify_all();
   }
+#endif
 
   template<typename Rep, typename Period>
   bool normal_shutdown(const std::chrono::duration<Rep, Period>& rel_time) {

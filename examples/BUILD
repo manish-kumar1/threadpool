@@ -24,7 +24,7 @@ cc_binary(
   srcs  = ["reduce.cpp"],
   copts = ["--std=c++2a", "-Wall", "-I/usr/include/tbb",] + copt_flags,
   deps = ["//:lib_thp", "@glog//:glog",],
-  linkopts = ["-lpthread", "-ltbb",] + link_flags,
+  linkopts = ["-lpthread"] + link_flags,
   visibility = ["//visibility:public"],
 )
 
@@ -33,7 +33,7 @@ cc_binary(
   srcs  = ["matmul.cpp"],
   copts = ["--std=c++2a", "-Wall", "-I/usr/include/tbb",] + copt_flags,
   deps = ["//:lib_thp", "@glog//:glog",],
-  linkopts = ["-lpthread", "-ltbb", ] + link_flags,
+  linkopts = ["-lpthread", ] + link_flags,
   visibility = ["//visibility:public"],
 )
 

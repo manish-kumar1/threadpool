@@ -16,6 +16,15 @@ namespace thp {
                                     x(const x&) = delete;
 
 namespace util {
+
+template<std::size_t N>
+constexpr void notify(std::condition_variable_any& cv) {
+  if constexpr (N == 1)
+    cv.notify_one();
+  else
+    cv.notify_all();
+}
+
 template<typename InputIter, typename OutputIter, typename Predicate>
 InputIter copy_until(InputIter s, InputIter e, OutputIter o, Predicate fn) {
   while (s != e) {

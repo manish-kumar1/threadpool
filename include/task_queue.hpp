@@ -44,7 +44,7 @@ protected:
 
   bool _pop(std::unique_ptr<task>& t) {
     bool ret = false;
-    if (tasks.size() > 0) {
+    if (!tasks.empty()) {
       t = std::move(tasks.back());
       tasks.pop_back();
       ret = true;

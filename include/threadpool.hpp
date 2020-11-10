@@ -31,36 +31,9 @@ public:
   void shutdown();
 
   // could be heterogeneous task types
-  template <typename... Args,
-            typename = std::enable_if_t<
-                (traits::is_smart_ptr<std::remove_reference_t<Args>>::value && ...)
-              >>
+  template <typename... Args>
   constexpr decltype(auto) schedule(Args &&... args) {
-    auto tasks = std::forward_as_tuple(std::forward<Args>(args)...);
-    auto fut_lambda = [](auto &&t) { return t->future(); };
-
-    auto futs = util::apply_on_tuple(fut_lambda, tasks);
-
-    jobq_.insert(std::move(tasks));
-    return futs;
-  }
-
-  // task container, e.g. vector, list of tasks
-  template <typename C, typename = std::enable_if_t<
-                            traits::is_container<std::decay_t<C>>::value>>
-  constexpr decltype(auto) schedule(C &&tasks) {
-    using TaskType = typename std::decay_t<C>::value_type::element_type;
-    using ReturnType = typename TaskType::ReturnType;
-
-    static_assert(std::is_base_of_v<thp::task, TaskType>);
-
-    std::vector<std::future<ReturnType>> futs;
-    futs.reserve(tasks.size());
-    std::transform(std::begin(tasks), std::end(tasks), std::back_inserter(futs),
-                   [](auto &&t) { return t->future(); });
-
-    jobq_.insert(std::move(tasks));
-    return futs;
+    return jobq_.insert(args...);
   }
 
   template <typename Fn, typename... Args>

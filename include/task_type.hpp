@@ -11,9 +11,20 @@
 namespace thp {
 
 // task interface
-struct task {
+struct executable {
   virtual void execute() = 0;
-  virtual ~task() = default;
+  virtual ~executable() = default;
+};
+
+template<typename T = int>
+class priority {
+public:
+  template<typename P>
+  decltype(auto) operator <=> (const priority<P>& rhs) const {
+    static_assert(std::is_convertible_v<T, P>);
+    return val <=> T(rhs.val);
+  }
+  T val;
 };
 
 // simple task, wrapper around packaged_task

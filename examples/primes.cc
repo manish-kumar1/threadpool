@@ -13,6 +13,7 @@ using namespace std;
 using namespace thp;
 using namespace chrono;
 
+// very inefficient prime checker to eat up cpu
 bool is_prime(unsigned n) {
   bool ret = true;
   if (n < 2)

@@ -141,7 +141,7 @@ public:
   void stop();
   void drain();
 
-  const bool &is_stopped() const;
+  bool &is_stopped() const;
 
   void register_worker();
   void deregister_worker();

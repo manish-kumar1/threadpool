@@ -13,14 +13,6 @@
 using namespace std::chrono;
 using namespace thp;
 
-auto print_future = [](auto &&fut) {
-  try {
-    auto v = fut.get();
-    std::cerr << "fut::value= " << v << std::endl;
-  } catch (std::exception& e) {
-    std::cerr << "fut::exception= " << e.what() << std::endl;
-  }
-};
 
 int exception_thread() {
   std::random_device r;
@@ -40,23 +32,6 @@ float segfault_function() {
   return 1/x;
 }
 
-// a highly inefficient prime checker 
-bool is_prime(unsigned int n) {
-  if (n <= 1) return false;
-  else if (n == 2) {
-    return true;
-  }
-  else if (n % 2 == 0)
-    return false;
-
-  for (unsigned i = 3; i < (1+sqrt(n)); i += 2) {
-    if (n % i == 0) {
-      return false;
-    }
-  }
-  return true;
-}
-
 decltype(auto) check_prime(const unsigned times, threadpool& tp) {
   std::vector<std::pair<unsigned int, std::future<bool>>> ret;
   std::random_device r;
@@ -69,7 +44,7 @@ decltype(auto) check_prime(const unsigned times, threadpool& tp) {
   for (unsigned int i = 0; i < times; ++i) {
     unsigned int num = dis(e);
     // create random types of jobs at runtime
-    	auto [fut1] = tp.schedule(util::make_task<bool>(is_prime, num));
+    	auto [fut1] = tp.schedule(is_prime, num);
     	ret.emplace_back(num, std::move(fut1));
     	auto [fut2] = tp.schedule(util::make_task<bool, float>(is_prime, num));
     	ret.emplace_back(num, std::move(fut2));
@@ -113,7 +88,10 @@ int main(int argc, const char* const argv[])
   auto p2 = util::make_task<unsigned, float>(factorial, 20); p2->set_priority(25.5f);
   auto p3 = util::make_task<check_prime_ret>(check_prime, 100, std::ref(tp));
 
-  auto [f0, f1, f2] = tp.schedule(p0, p1, p2);
+  auto [f0, f1, f2] = tp.schedule(p0,
+                                  p1,
+                                  p2,
+                                  );
 
   auto [f3] = tp.schedule(p3);
   print_primes(std::move(f3));

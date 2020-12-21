@@ -36,18 +36,6 @@ InputIter copy_until(InputIter s, InputIter e, OutputIter o, Predicate fn) {
   return s;
 }
 
-template<typename Ret, typename... Args>
-[[nodiscard]] constexpr inline std::unique_ptr<simple_task<Ret>> 
-make_task(Args&& ...args) {
-  return std::make_unique<simple_task<Ret>>(std::forward<Args>(args)...);
-}
-
-template<typename Ret, typename Prio, typename... Args>
-[[nodiscard]] constexpr inline std::unique_ptr<simple_task<Ret, Prio>> 
-make_task(Args&& ...args) {
-  return std::make_unique<simple_task<Ret, Prio>>(std::forward<Args>(args)...);
-}
-
 template <typename Fn, typename Tup>
 constexpr decltype(auto) apply_on_tuple(Fn &&fn, Tup &&tup) {
   return std::apply(

@@ -112,6 +112,18 @@ protected:
   std::packaged_task<Ret()> pt;
 };
 
+template<typename Fn, typename... Args>
+[[nodiscard]] constexpr inline decltype(auto) make_task(Fn&& fn, Args&& ...args) {
+  using Ret = std::invoke_result_t<Fn,Args...>;
+  return std::make_unique<simple_task<Ret>>(std::forward<Fn>(fn), std::forward<Args>(args)...);
+}
+
+template<typename Prio, typename Fn, typename... Args>
+[[nodiscard]] constexpr inline decltype(auto) make_task(Fn&& fn, Args&& ...args) {
+  using Ret = std::invoke_result_t<Fn,Args...>;
+  return std::make_unique<simple_task<Ret, Prio>>(std::forward<Fn>(fn), std::forward<Args>(args)...);
+}
+
 } // namespace thp
 
 #endif // TASK_TYPE_HPP_

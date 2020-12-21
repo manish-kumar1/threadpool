@@ -46,12 +46,12 @@ decltype(auto) check_prime(const unsigned times, threadpool& tp) {
     // create random types of jobs at runtime
     	auto [fut1] = tp.schedule(is_prime, num);
     	ret.emplace_back(num, std::move(fut1));
-    	auto [fut2] = tp.schedule(util::make_task<bool, float>(is_prime, num));
+    	auto [fut2] = tp.schedule(util::make_task<float>(is_prime, num));
     	ret.emplace_back(num, std::move(fut2));
-    	auto t = util::make_task<bool, system_clock::time_point>(is_prime, num);
+    	auto t = util::make_task<system_clock::time_point>(is_prime, num);
       auto [fut3] = tp.schedule(std::move(t));
     	ret.emplace_back(num, std::move(fut3));
-    	auto [fut4] = tp.schedule(util::make_task<bool, int>(is_prime, num));
+    	auto [fut4] = tp.schedule(util::make_task<int>(is_prime, num));
     	ret.emplace_back(num, std::move(fut4));
   }
   std::cerr << "check_prime created" << std::endl;
@@ -79,14 +79,12 @@ int main(int argc, const char* const argv[])
 {
   //google::InitGoogleLogging(argv[0]);
 
-  using check_prime_ret = std::result_of_t<decltype(&check_prime)(const unsigned, threadpool&)>;
-
   threadpool tp;
 
-  auto p0 = util::make_task<void>([] { std::cerr << "Hello world" << std::endl; });
-  auto p1 = util::make_task<unsigned, int>(factorial, 100); p1->set_priority(10);
-  auto p2 = util::make_task<unsigned, float>(factorial, 20); p2->set_priority(25.5f);
-  auto p3 = util::make_task<check_prime_ret>(check_prime, 100, std::ref(tp));
+  auto p0 = util::make_task([] { std::cerr << "Hello world" << std::endl; });
+  auto p1 = util::make_task<int>(factorial, 100); p1->set_priority(10);
+  auto p2 = util::make_task<float>(factorial, 20); p2->set_priority(25.5f);
+  auto p3 = util::make_task(check_prime, 100, std::ref(tp));
 
   auto [f0, f1, f2] = tp.schedule(p0,
                                   p1,
@@ -103,7 +101,7 @@ int main(int argc, const char* const argv[])
 
   tp.drain();
 
-  auto p5 = util::make_task<check_prime_ret, system_clock::time_point>(check_prime, 1024, std::ref(tp)); p5->set_priority(system_clock::now()+5s);
+  auto p5 = util::make_task<system_clock::time_point>(check_prime, 1024, std::ref(tp)); p5->set_priority(system_clock::now()+5s);
   auto [f5] = tp.schedule(p5);
   print_primes(std::move(f5));
 

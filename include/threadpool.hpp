@@ -38,8 +38,7 @@ public:
 
   template <typename Fn, typename... Args>
   constexpr decltype(auto) enqueue(Fn &&fn, Args &&... args) {
-    using Ret = std::invoke_result_t<Fn, Args...>;
-    return schedule(util::make_task<Ret>(std::forward<Fn>(fn), std::forward<Args>(args)...));
+    return schedule(make_task(std::forward<Fn>(fn), std::forward<Args>(args)...));
   }
 
   // parallel algorithm, for benchmarks see examples/reduce.cpp
@@ -62,7 +61,7 @@ public:
       tasks.reserve(part.count());
 
       for (auto it = part.begin(); !part(); it = part.current()) {
-        tasks.emplace_back(util::make_task<T>(transform_reduce_fn, it, part.next()));
+        tasks.emplace_back(make_task<T>(transform_reduce_fn, it, part.next()));
       }
 
       auto futs = schedule(std::move(tasks));
@@ -71,7 +70,7 @@ public:
                                    [](auto&& f) { return std::move(f.get());});
     };
 
-    return schedule(util::make_task<T>(reduce_task));
+    return schedule(make_task<T>(reduce_task));
   }
 
   template<typename InputIter, typename Fn>

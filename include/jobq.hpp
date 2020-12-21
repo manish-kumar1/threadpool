@@ -54,7 +54,7 @@ public:
       taskq_for<TaskType>().put(std::forward<T>(t));
       return fut;
     }
-    else if constexpr (traits::is_container<std::decay_t<T>>::value) {
+    else if constexpr (traits::is_container<T>::value) {
       using P = typename T::value_type;
       using TaskType = typename P::element_type;
       using ReturnType = typename TaskType::ReturnType;

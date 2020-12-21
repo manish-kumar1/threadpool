@@ -11,6 +11,7 @@ template<typename Clock>
 class clock_util {
 public:
   constexpr explicit clock_util() : s {Clock::time_point::min()}, e{Clock::time_point::min()} {}
+
   constexpr decltype(auto) now() noexcept {
     tmp = Clock::now();
     std::swap(s, e);

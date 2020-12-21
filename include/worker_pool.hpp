@@ -21,7 +21,7 @@ public:
   void start_n_thread(N n, Fn&& fn, Args&&... args) {
     std::unique_lock l(mu_);
     std::generate_n(std::back_inserter(workers_), n,
-      [&]() { return std::make_unique<platform::thread>(
+      [&]() { return platform::thread(
                       std::forward<Fn>(fn), 
                       std::forward<Args>(args)...); 
             });
@@ -30,7 +30,7 @@ public:
   template<typename Fn, typename... Args>
   decltype(auto) start_thread(Fn&& fn, Args&&... args) {
     std::unique_lock l(mu_);
-    return workers_.emplace_back(std::make_unique<platform::thread>(
+    return workers_.emplace_back(platform::thread(
                       std::forward<Fn>(fn), 
                       std::forward<Args>(args)...));
   }
@@ -49,7 +49,7 @@ public:
   void shutdown() {
     std::unique_lock l(mu_);
     for(auto& t : workers_)
-      t->join();
+      t.join();
   }
 
   ~worker_pool() = default;
@@ -57,7 +57,7 @@ public:
 private:
   mutable std::mutex mu_;
   platform::thread_config config_;
-  std::vector<std::unique_ptr<platform::thread>> workers_;
+  std::vector<platform::thread> workers_;
 };
 
 } // namespace thp

@@ -12,7 +12,7 @@ namespace thp {
 
 class priority_taskq : public task_queue {
 public:
-  void put(std::unique_ptr<task>&& t) {
+  void put(std::unique_ptr<executable>&& t) {
     std::lock_guard l(mu_);
     _put(std::move(t));
     std::push_heap(tasks.begin(), tasks.end()); 
@@ -20,7 +20,7 @@ public:
 
   }
 
-  bool pop(std::unique_ptr<task>& t) override {
+  bool pop(std::unique_ptr<executable>& t) override {
     std::unique_lock l(mu_);
     std::pop_heap(tasks.begin(), tasks.end());
 //                  [](auto &&t1, auto &&t2) { return t1->less(*t2); });

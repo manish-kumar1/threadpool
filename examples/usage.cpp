@@ -13,6 +13,25 @@
 using namespace std::chrono;
 using namespace thp;
 
+// very inefficient prime checker to eat up cpu
+bool is_prime(unsigned n) {
+  bool ret = true;
+  if (n < 2)
+    ret = false;
+  else if (n == 2)
+    ret = true;
+  else if (n%2 == 0)
+    ret = false;
+  else {
+    for (unsigned i = 3; i < static_cast<unsigned>(1 + sqrt(n)); i += 2) {
+      if (n % i == 0) {
+        ret = false;
+        break;
+      }
+    }
+  }
+  return ret;
+}
 
 int exception_thread() {
   std::random_device r;
@@ -44,21 +63,20 @@ decltype(auto) check_prime(const unsigned times, threadpool& tp) {
   for (unsigned int i = 0; i < times; ++i) {
     unsigned int num = dis(e);
     // create random types of jobs at runtime
-    	auto [fut1] = tp.schedule(is_prime, num);
+    	auto [fut1] = tp.enqueue(is_prime, num);
     	ret.emplace_back(num, std::move(fut1));
-    	auto [fut2] = tp.schedule(make_task<float>(is_prime, num));
-    	ret.emplace_back(num, std::move(fut2));
-    	auto t = make_task<system_clock::time_point>(is_prime, num);
-      auto [fut3] = tp.schedule(std::move(t));
-    	ret.emplace_back(num, std::move(fut3));
-    	auto [fut4] = tp.schedule(make_task<int>(is_prime, num));
-    	ret.emplace_back(num, std::move(fut4));
+    	auto [fut2, fut3, fut4] = tp.schedule(make_task<float>(is_prime, num),
+    	                                      make_task<system_clock::time_point>(is_prime, num),
+    	                                      make_task<int>(is_prime, num));
+      ret.emplace_back(num, std::move(fut2));
+      ret.emplace_back(num, std::move(fut3));
+      ret.emplace_back(num, std::move(fut4));
   }
   std::cerr << "check_prime created" << std::endl;
   return ret;
 }
 
-void print_primes(std::future<std::vector<std::pair<unsigned int, std::future<bool>>>> f) {
+void print_primes(std::future<std::vector<std::pair<unsigned int, std::future<bool>>>>& f) {
   // std::vector<std::shared_future<bool>> futs;
   // std::transform(primes.begin(), primes.end(), std::back_inserter(futs), [](auto& p) { return p.second;});
   // auto ans = std::when_all(futs.begin(), futs.end());
@@ -81,29 +99,29 @@ int main(int argc, const char* const argv[])
 
   threadpool tp;
 
-  auto p0 = make_task([] { std::cerr << "Hello world" << std::endl; });
-  auto p1 = make_task<int>(factorial, 100); p1->set_priority(10);
+  auto hello = [] { std::cerr << "hello world" << std::endl; };
+
+  auto p0 = make_task(hello);
+  auto p1 = make_task<int>(factorial, 10); p1->set_priority(-42);
   auto p2 = make_task<float>(factorial, 20); p2->set_priority(25.5f);
   auto p3 = make_task(check_prime, 100, std::ref(tp));
 
-  auto [f0, f1, f2] = tp.schedule(p0,
-                                  p1,
-                                  p2,
-                                  );
+  //std::list<simple_task<unsigned>> p4; // debug why list, deque crashes
+  std::vector<simple_task<unsigned>> p4;
+  p4.emplace_back(simple_task<unsigned>(factorial, 10));
+  p4.emplace_back(simple_task<unsigned>(factorial, 20));
 
-  auto [f3] = tp.schedule(p3);
-  print_primes(std::move(f3));
+  auto [f0, f1, f2, f3, f4] = tp.schedule(p0, p1, p2, p3, p4);
+  print_primes(f3);
 
-  auto [f4] = tp.enqueue(check_prime, 64, std::ref(tp));
-
-  auto p7 = make_task<int>(exception_thread);
-  tp.schedule(p7);
+  auto f5 = tp.enqueue(check_prime, 64, std::ref(tp));
+  auto p6 = tp.schedule(make_task<int>(exception_thread));
 
   tp.drain();
 
-  auto p5 = make_task<system_clock::time_point>(check_prime, 1024, std::ref(tp)); p5->set_priority(system_clock::now()+5s);
-  auto [f5] = tp.schedule(p5);
-  print_primes(std::move(f5));
+  auto p7 = make_task<system_clock::time_point>(check_prime, 1024, std::ref(tp)); p7->set_priority(system_clock::now()+5s);
+  auto [f7] = tp.schedule(p7);
+  print_primes(f7);
 
   std::vector<int> data = {1, 2, 3, 4, 5, 6, 10};
   tp.for_each(data.begin(), data.end(), [](int i) {

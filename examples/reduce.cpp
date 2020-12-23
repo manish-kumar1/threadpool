@@ -30,7 +30,7 @@ int main(int argc, const char* const argv[])
 {
   // Initialize Google's logging library.
   google::InitGoogleLogging(argv[0]);
-
+  int use_stl = argc > 1;
   try {
     std::random_device r;
     std::default_random_engine engine(r());
@@ -40,6 +40,7 @@ int main(int argc, const char* const argv[])
     data.reserve(n);
     std::generate_n(std::back_inserter(data), n, [&] { return dis(engine); });
     thp::util::clock_util<std::chrono::system_clock> cu;
+    if (use_stl)
     {
       cu.now();
       auto smin = std::transform_reduce(std::execution::par,
@@ -51,6 +52,7 @@ int main(int argc, const char* const argv[])
       cu.now();
       std::cerr << "stl(" << data.size() << "): " << cu.get_ms() << " ms" << ", ans = " << smin << std::endl;
     }
+    else
     {
       thp::threadpool tp;
       cu.now();

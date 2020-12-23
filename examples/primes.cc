@@ -5,6 +5,7 @@
 #include <glog/logging.h>
 #include <vector>
 #include <map>
+#include <ranges>
 
 #include "include/threadpool.hpp"
 #include "include/clock_util.hpp"
@@ -50,6 +51,7 @@ auto check_prime(thp::threadpool* tp) {
       ret.emplace_back(std::move(fut));
   }
   std::cerr << "check_prime created" << std::endl;
+  tp->drain();
   return ret;
 }
 
@@ -57,15 +59,14 @@ int main(int argc, const char* const argv[]) {
 //  google::InitGoogleLogging(argv[0]);
   util::clock_util<chrono::system_clock> cp;
   try {
-    cp.now();
     thp::threadpool tp;
+    cp.now();
     auto primes = check_prime(&tp);
-    tp.drain();
     cp.now();
 
-    for(auto& f : primes)
-      for(auto&& v : f.get())
-        std::cout << v << "\n";
+    std::ranges::for_each(primes, [](auto&& f) {
+         std::ranges::copy(f.get(), std::ostream_iterator<unsigned>(std::cout, "\n"));
+    });
 
     std::cerr << "thp: " << cp.get_ms() << " ms" << std::endl;
   } catch (exception &ex) {

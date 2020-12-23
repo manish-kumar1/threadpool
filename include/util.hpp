@@ -17,12 +17,8 @@ namespace thp {
 
 namespace util {
 
-template<std::size_t N>
-constexpr void notify(std::condition_variable_any& cv) {
-  if constexpr (N == 1)
-    cv.notify_one();
-  else
-    cv.notify_all();
+inline void notify_cv(std::condition_variable_any& cv, std::size_t N) {
+  N == 1 ? cv.notify_one() : cv.notify_all();
 }
 
 template<typename InputIter, typename OutputIter, typename Predicate>

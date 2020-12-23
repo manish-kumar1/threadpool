@@ -24,13 +24,13 @@ threadpool::threadpool(unsigned max_threads)
 {
   std::lock_guard<std::mutex> lck(mu_);
   auto sched_conf = platform::thread_config();
-  sched_conf.set_affinity({0});
+  //sched_conf.set_affinity({0});
 
   for (size_t i = 0; i < max_threads_; ++i)
     pool_.start_thread(&job_queue::worker_fn, &jobq_, stop_src_.get_token());
 
-  pool_.start_thread(&job_queue::schedule_fn, &jobq_, &scheduler_, stop_src_.get_token())->update_config(sched_conf);
-  pool_.start_thread(&threadpool::print, this, stop_src_.get_token(), std::ref(std::cerr));
+  pool_.start_thread(&job_queue::schedule_fn, &jobq_, &scheduler_, stop_src_.get_token()).update_config(sched_conf);
+  //pool_.start_thread(&threadpool::print, this, stop_src_.get_token(), std::ref(std::cerr));
 }
 
 void threadpool::print(std::stop_token st, std::ostream& oss) {

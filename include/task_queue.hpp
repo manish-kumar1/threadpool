@@ -10,15 +10,15 @@
 
 namespace thp {
 
-// one task container queue
+// one executable container queue
 class task_queue {
 public:
-  virtual void put(std::unique_ptr<task>&& p) {
+  virtual void put(std::unique_ptr<executable>&& p) {
     std::unique_lock l(mu_);
     _put(std::move(p));
   }
 
-  virtual bool pop(std::unique_ptr<task>& t) {
+  virtual bool pop(std::unique_ptr<executable>& t) {
     std::unique_lock l(mu_);
     return _pop(t);
   }
@@ -38,11 +38,11 @@ public:
   bool empty() const { return 0 == len(); }
 
 protected:
-  void _put(std::unique_ptr<task>&& p) {
+  void _put(std::unique_ptr<executable>&& p) {
     tasks.emplace_back(std::move(p));
   }
 
-  bool _pop(std::unique_ptr<task>& t) {
+  bool _pop(std::unique_ptr<executable>& t) {
     bool ret = false;
     if (!tasks.empty()) {
       t = std::move(tasks.back());
@@ -53,7 +53,7 @@ protected:
   }
 
   mutable std::shared_mutex mu_;
-  std::deque<std::unique_ptr<task>> tasks;
+  std::deque<std::unique_ptr<executable>> tasks;
 };
 
 } // namespace thp

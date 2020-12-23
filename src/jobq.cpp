@@ -32,7 +32,6 @@ job_queue::job_queue()
     , stopped_{false}
     , reschedule_{false}
 {
-  std::lock_guard l(mu_);
   idx_.reserve(Static::queue_table_capacity());
   tasks_qs_.emplace_back(new task_queue());
   idx_.emplace(std::make_pair(std::type_index(typeid(void)), 0));
@@ -88,7 +87,7 @@ void job_queue::schedule_fn(task_scheduler* scheduler, std::stop_token st)
 
 void job_queue::worker_fn(std::stop_token st) {
   auto me = std::this_thread::get_id();
-  std::unique_ptr<task> t{};
+  std::unique_ptr<executable> t{};
 
   register_worker();
 
@@ -109,13 +108,14 @@ void job_queue::worker_fn(std::stop_token st) {
         break;
     }
 
+    t->execute();
+
     if (0 != num_tasks_)
       --num_tasks_;
 
     if (0 == num_tasks_)
       cond_empty_.notify_all();
 
-    t->execute();
   }
 
   deregister_worker();
@@ -181,7 +181,7 @@ void job_queue::check_stop() {
     throw jobq_stopped_ex();
 }
 
-const bool& job_queue::is_stopped() const {
+bool job_queue::is_stopped() const {
   std::shared_lock l(mu_);
   return stopped_;
 }

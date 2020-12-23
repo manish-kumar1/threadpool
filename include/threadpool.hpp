@@ -32,12 +32,12 @@ public:
 
   // could be heterogeneous task types
   template <typename... Args>
-  constexpr decltype(auto) schedule(Args &&... args) {
+  constexpr decltype(auto) schedule(Args&&... args) {
     return jobq_.insert(args...);
   }
 
   template <typename Fn, typename... Args>
-  constexpr decltype(auto) enqueue(Fn &&fn, Args &&... args) {
+  constexpr decltype(auto) enqueue(Fn&& fn, Args&&... args) {
     return schedule(make_task(std::forward<Fn>(fn), std::forward<Args>(args)...));
   }
 
@@ -61,16 +61,16 @@ public:
       tasks.reserve(part.count());
 
       for (auto it = part.begin(); !part(); it = part.current()) {
-        tasks.emplace_back(make_task<T>(transform_reduce_fn, it, part.next()));
+        tasks.emplace_back(make_task(transform_reduce_fn, it, part.next()));
       }
 
-      auto futs = schedule(std::move(tasks));
+      auto [futs] = schedule(std::move(tasks));
 
       return std::transform_reduce(futs.begin(), futs.end(), init, rdc_fn,
                                    [](auto&& f) { return std::move(f.get());});
     };
 
-    return schedule(make_task<T>(reduce_task));
+    return schedule(make_task(reduce_task));
   }
 
   template<typename InputIter, typename Fn>

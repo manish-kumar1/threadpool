@@ -45,66 +45,78 @@ class job_queue {
 public:
   explicit job_queue();
 
-  template <typename TT>
-  constexpr decltype(auto) insert_task(TT &&t) {
-    using T = std::decay_t<TT>;
+  template <typename C>
+  constexpr decltype(auto) insert_task(C&& t) {
+    using T = std::remove_cvref_t<C>;
     if constexpr (traits::is_smart_ptr<T>::value) {
-      using TaskType = typename T::element_type;
+      using TaskType = std::decay_t<typename T::element_type>;
       auto fut = t->future();
       taskq_for<TaskType>().put(std::forward<T>(t));
+      num_tasks_ += 1;
+      cond_full_.notify_one();
       return fut;
     }
-    else if constexpr (traits::is_container<T>::value) {
-      using P = typename T::value_type;
-      using TaskType = typename P::element_type;
-      using ReturnType = typename TaskType::ReturnType;
-
-      static_assert(traits::is_smart_ptr<P>::value && std::is_base_of_v<task, TaskType>);
-
-      check_stop();
-      auto N = t.size();
-      std::vector<std::future<ReturnType>> futs;
-      futs.reserve(N);
-      std::transform(t.begin(), t.end(), std::back_inserter(futs),
-                    [](auto&& w) { return w->future(); });
-    
-      taskq_for<TaskType>().insert(std::make_move_iterator(t.begin()),
-                                 std::make_move_iterator(t.end()));
-      num_tasks_ += N;
-      util::notify<N>(cond_full_);
-      return futs;
+    else if constexpr (std::is_base_of_v<executable, T>) {
+      auto fut = t.future();
+      taskq_for<std::decay_t<T>>().put(std::forward<T>(t));
+      num_tasks_ += 1;
+      cond_full_.notify_one();
+      return fut;
     }
-    else
-      static_assert("type not supported");
+    else if (traits::is_container<T>::value) {
+      using P = typename T::value_type;
+
+      if constexpr (traits::is_smart_ptr<P>::value) {
+        using TaskType = typename P::element_type;
+        using ReturnType = typename TaskType::ReturnType;
+  
+        static_assert(traits::is_smart_ptr<P>::value && std::is_base_of_v<executable, TaskType>);
+
+        //  check_stop();
+        auto N = t.size();
+        std::vector<std::future<ReturnType>> futs;
+        futs.reserve(N);
+        std::transform(t.begin(), t.end(), std::back_inserter(futs),
+                      [](auto&& w) { return w->future(); });
+    
+        taskq_for<TaskType>().insert(std::make_move_iterator(t.begin()),
+                                   std::make_move_iterator(t.end()));
+        num_tasks_ += N;
+        util::notify_cv(cond_full_, N);
+        return futs;
+      }
+      else if constexpr (std::is_base_of_v<executable, P>) {
+        using TaskType = std::remove_cvref_t<P>;
+        using ReturnType = typename TaskType::ReturnType;
+
+      //  check_stop();
+        auto N = t.size();
+        std::vector<std::future<ReturnType>> futs;
+        futs.reserve(N);
+        std::transform(t.begin(), t.end(), std::back_inserter(futs),
+                      [](auto&& w) { return w.future(); });
+
+        std::vector<std::unique_ptr<TaskType>> tasks;
+        std::transform(t.begin(), t.end(), std::back_inserter(tasks),
+                        [](auto&& w) { return std::make_unique<TaskType>(std::move(w)); });
+        taskq_for<TaskType>().insert(std::make_move_iterator(tasks.begin()),
+                                     std::make_move_iterator(tasks.end()));
+        num_tasks_ += N;
+        util::notify_cv(cond_full_, N);
+        return futs;
+      }
+      else
+        static_assert("type not supported");
+    }
+  else
+    static_assert("type not supported");
   }
-
-  template<typename InputIter>
-  constexpr decltype(auto) insert_task(InputIter s, InputIter e) {
-    using TaskType = std::iterator_traits<InputIter>::value_type::element_type;
-    using ReturnType = typename TaskType::ReturnType;
-
-    check_stop();
-    constexpr auto N = std::distance(s, e);
-    std::vector<std::future<ReturnType>> futs;
-    futs.reserve(N);
-    std::transform(s, e, std::back_inserter(futs),
-                    [](auto&& t) { return t->future(); });
-    taskq_for<TaskType>().insert(std::make_move_iterator(s),
-                                 std::make_move_iterator(e));
-    num_tasks_ += N;
-    util::notify<N>(cond_full_);
-    return futs;
-  }
-
 
   template <typename... Args>
   constexpr decltype(auto) insert(Args&&... args) {
-    auto futs = (std::make_tuple() + ... + std::make_tuple(insert_task(std::forward<Args>(args))));
-    constexpr auto N = std::tuple_size_v<decltype(futs)>;
-    num_tasks_ += N;
-    util::notify<N>(cond_full_);
-    return futs;
+    return (std::make_tuple() + ... + std::make_tuple(insert_task(std::forward<Args>(args))));
   }
+
 #if 0
   template <typename... Args>
   constexpr decltype(auto) insert(std::tuple<Args...>&& tasks) {
@@ -141,7 +153,7 @@ public:
   void stop();
   void drain();
 
-  bool &is_stopped() const;
+  bool is_stopped() const;
 
   void register_worker();
   void deregister_worker();

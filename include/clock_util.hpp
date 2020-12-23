@@ -2,7 +2,7 @@
 #define CLOCK_UTIL_HPP
 
 #include <chrono>
-#include <algorithm>
+#include <ratio>
 
 namespace thp {
 namespace util {
@@ -19,12 +19,9 @@ public:
     return *this;
   }
 
-  constexpr double get_ns() noexcept {
-    return std::chrono::duration_cast<std::chrono::nanoseconds>(e-s).count();
-  }
-
   constexpr double get_us() noexcept {
-    return get_ns()/1000.0f;
+    std::chrono::duration<double, std::micro> tot = e-s;
+    return tot.count();
   }
 
   constexpr double get_ms() noexcept {

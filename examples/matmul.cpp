@@ -13,7 +13,7 @@
 #include "include/clock_util.hpp"
 
 using Val = int;
-constexpr size_t N = 1024;
+constexpr size_t N = 1024+512;
 using Matrix = std::array<std::array<Val, N>, N>;
 
 Matrix mat1, mat2, ans1, ans2;
@@ -46,10 +46,10 @@ decltype(auto) matmul_tp(const Matrix& mat1,
                 }
             };
 
-  const size_t step = 32;
+  const size_t step = 64;
   for(auto i = 0u; i < n; i += step)
     for(auto j = 0u; j < n; j += step) {
-      tp.schedule(thp::util::make_task<void>(mul, i, std::min(n, i+step), j, std::min(n, j+step)));
+      tp.schedule(thp::make_task(mul, i, std::min(n, i+step), j, std::min(n, j+step)));
     }
 
   tp.drain();
@@ -61,11 +61,10 @@ int main(int argc, const char* const argv[])
   google::InitGoogleLogging(argv[0]);
 
   bool compare = false;
-  thp::util::clock_util<std::chrono::steady_clock> cu;
 
   try {
     // generate data
-    for(size_t n = 0; n < N; n += 64) {
+    for(size_t n = 0; n < N; n += 256) {
       std::random_device r;
       std::default_random_engine engine(r());
       std::uniform_int_distribution<Val> dis(-4200, +4200);
@@ -74,24 +73,27 @@ int main(int argc, const char* const argv[])
         auto& row2 = mat2[i];
         std::generate_n(row1.begin(), n, [&] { return dis(engine); });
         std::generate_n(row2.begin(), n, [&] { return dis(engine); });
+        std::fill_n(ans1[i].begin(), n, 0);
+        std::fill_n(ans2[i].begin(), n, 0);
       }
       {
         thp::threadpool tp;
+        thp::util::clock_util<std::chrono::steady_clock> cu;
         cu.now();
         matmul_tp(mat1, mat2, ans1, n, tp);
         cu.now();
         std::cerr << "thp:    (" << n << "x" << n << ") = " << cu.get_ms() << " ms" << std::endl;
-
         tp.shutdown();
       }
-
+#if 0
       {
+        thp::util::clock_util<std::chrono::steady_clock> cu;
         cu.now();
         matmul_normal(mat1, mat2, ans2, n);
         cu.now();
         std::cerr << "normal: (" << n << "x" << n << ") = " << cu.get_ms() << " ms" << std::endl;
       }
-
+#endif
       if (compare)
       {
         bool passed = true;

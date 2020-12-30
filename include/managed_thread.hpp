@@ -40,11 +40,9 @@ public:
   thread(const thread &) = delete;
   thread &operator=(const thread &) = delete;
 
-  bool joinable() noexcept override { return th_.joinable(); }
+  bool joinable() noexcept override                { return th_.joinable(); }
   std::thread::id get_id() const noexcept override { return th_.get_id(); }
-  std::thread::native_handle_type native_handle() override {
-    return th_.native_handle();
-  }
+  std::thread::native_handle_type native_handle() override { return th_.native_handle(); }
   void join() override { if (joinable()) th_.join(); }
 
   void stop() override { config_->cancel(this); }
@@ -59,8 +57,7 @@ public:
   }
 
   std::shared_ptr<configuration> get_config() override {
-    if (!config_)
-      config_.reset(new thread_config());
+    if (!config_) config_.reset(new thread_config());
     config_->retrieve(this);
     return config_;
   }

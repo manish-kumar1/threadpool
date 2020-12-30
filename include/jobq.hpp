@@ -72,7 +72,6 @@ public:
   
         static_assert(traits::is_smart_ptr<P>::value && std::is_base_of_v<executable, TaskType>);
 
-        //  check_stop();
         auto N = t.size();
         std::vector<std::future<ReturnType>> futs;
         futs.reserve(N);
@@ -80,7 +79,7 @@ public:
                       [](auto&& w) { return w->future(); });
     
         taskq_for<TaskType>().insert(std::make_move_iterator(t.begin()),
-                                   std::make_move_iterator(t.end()));
+                                     std::make_move_iterator(t.end()));
         num_tasks_ += N;
         util::notify_cv(cond_full_, N);
         return futs;
@@ -89,7 +88,6 @@ public:
         using TaskType = std::remove_cvref_t<P>;
         using ReturnType = typename TaskType::ReturnType;
 
-      //  check_stop();
         auto N = t.size();
         std::vector<std::future<ReturnType>> futs;
         futs.reserve(N);
@@ -172,7 +170,7 @@ protected:
   constexpr task_queue &taskq_for(void) {
     using PriorityType = std::decay_t<typename TaskType::PriorityType>;
 
-    std::unique_lock l(mu_);
+    //std::unique_lock l(mu_);
     auto x = std::type_index(typeid(PriorityType));
     auto it = idx_.find(x);
     if (it == idx_.end()) {

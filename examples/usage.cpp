@@ -103,6 +103,8 @@ int main(int argc, const char* const argv[])
 
   auto p0 = make_task(hello);
   auto p1 = make_task<int>(factorial, 10); p1->set_priority(-42);
+//  auto x = priority_task<int>(factorial, 10).priority(-42).run_on(cpu1).after(p0).before(p3).for(3s);
+//  auto x = priority_task<int>(factorial, 10).priority(-42).with_config(conf)
   auto p2 = make_task<float>(factorial, 20); p2->set_priority(25.5f);
   auto p3 = make_task(check_prime, 100, std::ref(tp));
 

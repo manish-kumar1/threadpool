@@ -17,46 +17,18 @@ namespace rng = std::ranges;
 
 template<std::size_t N>
 auto word_map = [](const std::string& file_path) {
-    std::unordered_map<std::string, unsigned> wm;
-    std::array<char, N> line;
-
-    if (!file_path.empty()) {
-        std::ifstream ifs{file_path};
-        while(ifs.good()) {
-            auto gc = ifs.getline(line.data(), N).gcount();
-            if (gc < 2) continue; // empty line
-            if (ifs.fail() && (gc == N-1)) {
-                std::ostringstream err;
-                err << file_path << ": length of line > " << N;
-                throw std::logic_error(err.str());
-            }
-
-#if 0
-            std::string_view l{line.data(), gc - 1};
-            // regex doesn't work with string_view out of box
-            const std::regex rgx{"\\s+"};
-            std::for_each(std::sregex_token_iterator(l.cbegin(), l.cend(), rgx, -1),
-                          std::sregex_token_iterator(),
-                          [](auto&& w) {
-                            wm[w] += 1;
-                        });
-#endif
-            const auto line_end = std::next(line.begin(), gc - 1);
-            for(auto line_start = line.begin(); line_start != line_end; ) {
-                auto x = std::find_if_not(line_start, line_end, isspace);
-                auto y = std::find_if(x, line_end, isspace);
-                if (std::distance(x, y) > 0)
-                    wm[std::string(x, y)] += 1;
-
-                line_start = y;
-            }
-        }
-    }
-    return wm;
+    std::ifstream ifs{file_path};
+    return std::accumulate(std::istream_iterator<std::string>(ifs),
+                           std::istream_iterator<std::string>(),
+                           std::unordered_map<std::string, unsigned>{},
+                           [](auto&& mp, auto&& s) {
+                                   mp[s] += 1;
+                                   return std::move(mp);
+                           });
 };
 
-template<typename Iter, typename Size, typename Comp = std::greater<typename Iter::value_type>>
-decltype(auto) most_common(Iter s, Iter e, const Size n, Comp comp = Comp{})
+template<std::input_iterator I, std::sentinel_for<I> S, typename Size, typename Comp = std::greater<typename I::value_type>>
+decltype(auto) most_common(I s, S e, const Size n, Comp comp = Comp{})
 {
   //using value_type = std::decay_t<typename Iter::value_type>;
   //static_assert(std::is_copy_assignable_v<value_type>, "data type is not copy assignable");
@@ -115,12 +87,11 @@ int main(int argc, const char* const argv[])
     };
     auto path = [] (auto&& e) { return e.path(); };
 
-    auto paths = entries | std::views::filter(matches) | std::views::transform(path);
-    rng::copy(paths, std::back_inserter(file_paths));
+    rng::copy(entries | std::views::filter(matches) | std::views::transform(path),
+              std::back_inserter(file_paths));
     auto table_update = [](auto&& tot, auto&& val) {
-                            for(auto&& [k,v] : val)
-                                tot[k] += v;
-                            return std::move(tot); 
+                           tot.merge(std::move(val));
+                           return std::move(tot); 
                         };
 
     auto pair_comp = [](auto&& a, auto&& b) { return a.second > b.second; };

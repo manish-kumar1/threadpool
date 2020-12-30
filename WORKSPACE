@@ -5,11 +5,18 @@ workspace(
 load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
+#
+#git_repository(
+#  name = "gtest",
+#  branch = "master",
+#  commit = "23b2a3b1cf803999fb38175f6e9e038a4495c8a5",
+#  remote = "https://github.com/google/googletest.git",
+#)
+
 git_repository(
-  name = "gtest",
-  branch = "master",
-  commit = "23b2a3b1cf803999fb38175f6e9e038a4495c8a5",
-  remote = "https://github.com/google/googletest.git",
+    name = "gtest",
+    remote = "https://github.com/google/googletest",
+    branch = "v1.10.x",
 )
 
 http_archive(
@@ -33,4 +40,10 @@ git_repository(
   name = "yaml-cpp",
   remote = "https://github.com/jbeder/yaml-cpp.git",
   commit = "b2f89386d8f88655e47c4be0c719073dd6308a21"
+)
+
+new_local_repository(
+  name = "spdlog",
+  path = "./external/spdlog/",
+  build_file = "./external/spdlog.BUILD"
 )

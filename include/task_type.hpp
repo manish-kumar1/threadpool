@@ -1,31 +1,17 @@
 #ifndef TASK_TYPE_HPP_
 #define TASK_TYPE_HPP_
 
+#include <concepts>
 #include <functional>
 #include <future>
 #include <memory>
-#include <thread>
-#include <tuple>
 #include <type_traits>
+#include <compare>
+
+#include "include/executable.hpp"
+#include "include/concepts.hpp"
 
 namespace thp {
-
-// task interface
-struct executable {
-  virtual void execute() = 0;
-  virtual ~executable() = default;
-};
-
-template<typename T = int>
-class priority {
-public:
-  template<typename P>
-  decltype(auto) operator <=> (const priority<P>& rhs) const {
-    static_assert(std::is_convertible_v<T, P>);
-    return val <=> T(rhs.val);
-  }
-  T val;
-};
 
 // simple task, could be shared across threads
 template<typename Ret>
@@ -33,10 +19,10 @@ struct simple_task : virtual public executable {
   using ReturnType = Ret;
   using PriorityType = void;
 
-  template <typename Fn, typename... Args,
-            typename = std::enable_if_t<
-                std::is_same_v<Ret, std::invoke_result_t<Fn, Args...>>>>
-  explicit simple_task(Fn &&fn, Args &&... args)
+  template <typename Fn, typename... Args>
+  requires std::regular_invocable<Fn,Args...>
+           && std::same_as<Ret, std::invoke_result_t<Fn,Args...>>
+  constexpr explicit simple_task(Fn &&fn, Args &&... args)
       : pt{std::bind(std::forward<Fn>(fn), std::forward<Args>(args)...)}
   {}
 
@@ -46,7 +32,8 @@ struct simple_task : virtual public executable {
   void execute() override { pt(); }
 
   std::future<Ret> future() { return pt.get_future(); }
-  virtual std::ostream& info(std::ostream& oss) {
+
+  virtual std::ostream& info(std::ostream& oss) override {
     oss << typeid(decltype(pt)).name();
     return oss;
   }
@@ -57,15 +44,17 @@ protected:
   std::packaged_task<Ret()> pt;
 };
 
-// simple task, wrapper around packaged_task
 template <typename Ret, typename Prio>
+requires std::totally_ordered<Prio>
 class priority_task : public simple_task<Ret> {
 public:
   using ReturnType = Ret;
   using PriorityType = Prio;
 
   template <typename Fn, typename... Args>
-  explicit priority_task(Fn &&fn, Args &&... args)
+  requires std::regular_invocable<Fn,Args...>
+           && std::same_as<Ret, std::invoke_result_t<Fn,Args...>>
+  constexpr explicit priority_task(Fn &&fn, Args &&... args)
       : simple_task<Ret>{std::forward<Fn>(fn), std::forward<Args>(args)...}
       , priority {}
   {}
@@ -73,17 +62,20 @@ public:
   priority_task(priority_task&&) = default;
   priority_task& operator = (priority_task&&) = default;
 
-  decltype(auto) set_priority(Prio&& prio) {
+  constexpr decltype(auto) set_priority(Prio&& prio) {
     priority = std::forward<Prio>(prio);
     return std::ref(*this);
   }
 
-  template<typename T>
-  auto operator <=> (T&& rhs) {
-    static_assert(std::is_same_v<typename T::PriorityType, PriorityType>);
-    return this->priority <=> rhs.priority;
+  constexpr auto get_priority() const { return priority; }
+
+  template<kncpt::PriorityTask T>
+  constexpr std::strong_ordering operator <=> (const T& rhs) const
+  {
+    return this->get_priority() <=> rhs.get_priority();
   }
-  std::ostream& info(std::ostream& oss) override {
+
+  constexpr std::ostream& info(std::ostream& oss) override {
     simple_task<Ret>::info(oss);
     //oss << priority;
     return oss;
@@ -92,6 +84,7 @@ public:
   virtual ~priority_task() = default;
 
 protected:
+//  simple_task<Ret> tak;
   Prio priority;
 };
 

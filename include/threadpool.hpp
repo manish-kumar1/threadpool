@@ -37,19 +37,32 @@ public:
   }
 
   template <typename Fn, typename... Args>
+  requires std::invocable<Fn,Args...>
   constexpr decltype(auto) enqueue(Fn&& fn, Args&&... args) {
     return schedule(make_task(std::forward<Fn>(fn), std::forward<Args>(args)...));
   }
 
   // parallel algorithm, for benchmarks see examples/reduce.cpp
-  template <typename InputIter, typename T, typename BinaryOp, typename Partitioner>
-  decltype(auto) reduce(InputIter s, InputIter e, T init, BinaryOp rdc_fn, Partitioner part) {
+  template <
+    std::input_iterator I, std::sentinel_for<I> S,
+    typename T,
+    typename BinaryOp,
+    typename Partitioner
+  >
+  requires std::movable<T>
+  decltype(auto) reduce(I s, S e, T init, BinaryOp rdc_fn, Partitioner part) {
     return transform_reduce(s, e, std::move(init), rdc_fn, std::identity(), part);
   }
 
-  template <typename InputIter, typename T, typename BinaryOp, typename UnaryOp,
-            typename Partitioner>
-  decltype(auto) transform_reduce(InputIter s, InputIter e, T init,
+  template <
+    std::input_iterator I, std::sentinel_for<I> S,
+    typename T,
+    typename BinaryOp,
+    typename UnaryOp,
+    typename Partitioner
+  >
+  requires std::movable<T>
+  decltype(auto) transform_reduce(I s, S e, T init,
                                   BinaryOp rdc_fn, UnaryOp tr_fn,
                                   Partitioner part) {
     auto transform_reduce_fn = [=](auto &&s1, auto &&e1) {
@@ -60,6 +73,11 @@ public:
       std::vector<std::unique_ptr<simple_task<T>>> tasks;
       tasks.reserve(part.count());
 
+#if 0
+      for_each(part.begin(), part.end(), [](auto p) {
+        tasks.emplace_back(make_task(transform_reduce_fn, p.first, p.second));
+      });
+#endif
       for (auto it = part.begin(); !part(); it = part.current()) {
         tasks.emplace_back(make_task(transform_reduce_fn, it, part.next()));
       }

@@ -67,7 +67,7 @@ void job_queue::schedule_fn(task_scheduler* scheduler, std::stop_token st)
   for(;;) {
     std::unique_lock l(mu_);
 
-    auto timedout = sched_cond_.wait_for(l, Static::scheduler_tick(), [&] { return reschedule_ ;});
+    sched_cond_.wait_for(l, Static::scheduler_tick(), [&] { return reschedule_ ;});
     if (st.stop_requested()) break;
     if (reschedule_ || num_tasks_ > 0) {
       reschedule_ = false;
@@ -87,11 +87,11 @@ void job_queue::schedule_fn(task_scheduler* scheduler, std::stop_token st)
 
 void job_queue::worker_fn(std::stop_token st) {
   auto me = std::this_thread::get_id();
-  std::unique_ptr<executable> t{};
 
   register_worker();
 
   for(;;) {
+    std::unique_ptr<executable> t{};
     {
       std::shared_lock l(mu_);
       cond_full_.wait(l, st, [&] {
@@ -115,7 +115,6 @@ void job_queue::worker_fn(std::stop_token st) {
 
     if (0 == num_tasks_)
       cond_empty_.notify_all();
-
   }
 
   deregister_worker();
@@ -132,10 +131,8 @@ bool job_queue::update_table() {
 }
 
 void job_queue::close() {
-  {
-    std::unique_lock l(mu_);
-    closed_ = true;
-  }
+  std::unique_lock l(mu_);
+  closed_ = true;
 }
 
 void job_queue::stop() {

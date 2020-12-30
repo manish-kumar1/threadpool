@@ -55,19 +55,13 @@ struct is_vector<std::vector<T...>> : std::true_type {};
 
 template <typename... T>
 struct is_container : std::integral_constant<bool, is_vector<T...>::value> {};
+#if 0
+template <typename T> struct is_simple_task : std::false_type{};
+template <typename T, typename P> struct is_priority_task : std::false_type{};
 
-// template<typename T>
-// struct is_simple_task : std::false_type {};
-// template<typename T>
-// struct is_simple_task<::thp::simple_task<T>> : std::true_type {};
-
-// template<typename T>
-// struct is_priority_task : std::false_type {};
-// template<typename... T>
-// struct is_priority_task<::thp::priority_task<T...>> : std::true_type {};
-
-// template<typename... T>
-// struct is_task_type : std::integral_constant<bool, is_simple_task<T...> || is_priority_task<T...>> {};
+template <typename T> struct is_simple_task<simple_task<T>> : std::true_type{};
+template <typename T, typename P> struct is_priority_task<priority_task<T,P>> : std::true_type{};
+#endif
 
 } // namespace traits
 } // namespace thp

@@ -45,19 +45,19 @@ auto find_prime(unsigned s, unsigned e) {
 auto check_prime(thp::threadpool* tp) {
   const unsigned int times = 10000000; // 10 million
   std::vector<std::future<std::vector<unsigned>>> ret;
-  auto step = 1000000;
+  auto step = 125*1000;
   for (unsigned int i = 0; i < times; i += step) {
       auto [fut] = tp->enqueue(find_prime, i, i+step);
       ret.emplace_back(std::move(fut));
   }
-  std::cerr << "check_prime created" << std::endl;
+//  std::cerr << "check_prime created" << std::endl;
   tp->drain();
   return ret;
 }
 
 int main(int argc, const char* const argv[]) {
 //  google::InitGoogleLogging(argv[0]);
-  util::clock_util<chrono::system_clock> cp;
+  util::clock_util<chrono::steady_clock> cp;
   try {
     thp::threadpool tp;
     cp.now();

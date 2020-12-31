@@ -102,7 +102,8 @@ int main(int argc, const char* const argv[])
   auto hello = [] { std::cerr << "hello world" << std::endl; };
 
   auto p0 = make_task(hello);
-  auto p1 = make_task<int>(factorial, 10); p1->set_priority(-42);
+//  auto p1 = make_task<int>(factorial, 10); p1->set_priority(-42);
+  priority_task<unsigned, int> p1(factorial, 10); p1.set_priority(-42);
 //  auto x = priority_task<int>(factorial, 10).priority(-42).run_on(cpu1).after(p0).before(p3).for(3s);
 //  auto x = priority_task<int>(factorial, 10).priority(-42).with_config(conf)
   auto p2 = make_task<float>(factorial, 20); p2->set_priority(25.5f);
@@ -113,8 +114,8 @@ int main(int argc, const char* const argv[])
   p4.emplace_back(simple_task<unsigned>(factorial, 10));
   p4.emplace_back(simple_task<unsigned>(factorial, 20));
 
-  auto [f0, f1, f2, f3, f4] = tp.schedule(p0, p1, p2, p3, p4);
-  print_primes(f3);
+  auto [f1] = tp.schedule(p1);
+  //print_primes(f3);
 
   auto f5 = tp.enqueue(check_prime, 64, std::ref(tp));
   auto p6 = tp.schedule(make_task<int>(exception_thread));

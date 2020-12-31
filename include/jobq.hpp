@@ -12,6 +12,7 @@
 #include <typeindex>
 #include <stop_token>
 #include <tuple>
+#include <type_traits>
 
 #include "include/traits.hpp"
 #include "include/task_queue.hpp"
@@ -47,7 +48,8 @@ public:
 
   template <typename C>
   constexpr decltype(auto) insert_task(C&& t) {
-    using T = std::remove_cvref_t<C>;
+    using T = std::remove_cvref_t<decltype(t)>;
+    //std::cerr << typeid(T).name() << std::endl;
     if constexpr (traits::is_smart_ptr<T>::value) {
       using TaskType = std::decay_t<typename T::element_type>;
       auto fut = t->future();
@@ -56,9 +58,18 @@ public:
       cond_full_.notify_one();
       return fut;
     }
+    else if constexpr (traits::is_reference_wrapper<T>::value) {
+      //static_assert("reference_wrapper");
+      using TT = std::decay_t<typename T::type>;
+      auto fut = t.get().future();
+      taskq_for<TT>().put(std::make_unique<TT>(std::move(t.get())));
+      num_tasks_ += 1;
+      cond_full_.notify_one();
+      return fut;
+    }
     else if constexpr (std::is_base_of_v<executable, T>) {
       auto fut = t.future();
-      taskq_for<std::decay_t<T>>().put(std::forward<T>(t));
+      taskq_for<T>().put(std::make_unique<T>(std::move(t)));
       num_tasks_ += 1;
       cond_full_.notify_one();
       return fut;

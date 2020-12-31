@@ -59,13 +59,13 @@ int main(int argc, const char* const argv[]) {
 //  google::InitGoogleLogging(argv[0]);
   util::clock_util<chrono::steady_clock> cp;
   try {
-    thp::threadpool tp;
+    thp::threadpool tp(16);
     cp.now();
     auto primes = check_prime(&tp);
     cp.now();
 
     std::ranges::for_each(primes, [](auto&& f) {
-         std::ranges::copy(f.get(), std::ostream_iterator<unsigned>(std::cout, "\n"));
+         std::ranges::copy(f.get(), std::ostream_iterator<unsigned>(std::cerr, "\n"));
     });
 
     std::cerr << "thp: " << cp.get_ms() << " ms" << std::endl;

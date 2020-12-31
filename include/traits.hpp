@@ -9,6 +9,7 @@
 #include <memory>
 #include <type_traits>
 #include <vector>
+#include <functional>
 
 #include "include/task_type.hpp"
 
@@ -45,6 +46,12 @@ template <typename T> struct is_timepoint : std::false_type {};
 
 template <typename T>
 struct is_timepoint<std::chrono::time_point<T>> : std::true_type {};
+
+template<typename T>
+struct is_reference_wrapper : std::false_type {};
+
+template<typename T>
+struct is_reference_wrapper<std::reference_wrapper<T>> : std::true_type{};
 
 template <typename... T> struct is_vector : std::false_type {};
 template <typename... T> struct is_linked_list : std::false_type {};

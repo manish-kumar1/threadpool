@@ -64,7 +64,7 @@ public:
 
   constexpr decltype(auto) set_priority(Prio&& prio) {
     priority = std::forward<Prio>(prio);
-    return std::ref(*this);
+    return *this;
   }
 
   constexpr auto get_priority() const { return priority; }

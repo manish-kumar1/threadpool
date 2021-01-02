@@ -12,8 +12,10 @@
 #include "include/partitioner.hpp"
 #include "include/clock_util.hpp"
 
+namespace rng = std::ranges;
+
 using Val = int;
-constexpr size_t N = 1024+512;
+constexpr size_t N = 1024;
 using Matrix = std::array<std::array<Val, N>, N>;
 
 Matrix mat1, mat2, ans1, ans2;
@@ -36,8 +38,37 @@ decltype(auto) matmul_tp(const Matrix& mat1,
 {
   // mxn nxm => mxm
   //std::vector<thp::simple_task<void>> tasks;
-  auto mul = [&](size_t rs, size_t re, size_t cs, size_t ce) -> void {
-      //        std::cerr << rs << ":" << re << ":" << cs << ":" << ce << ", n= " << n << std::endl;
+  auto mul3 = [&](const size_t cs, const size_t ce, const size_t step) {
+    auto tile = [&] (const size_t j, const size_t rs, const size_t re, const std::array<Val, N>& col) {
+      for (size_t i = rs; i < re; ++i) {
+        ans[i][j] = std::inner_product(mat1[i].begin(), mat1[i].begin()+n, col.cbegin(), 0, std::plus<>(), std::multiplies<>());
+      }
+    };
+
+    for (auto c = cs; c < ce; ++c)
+      for(size_t i = 0; i < n; i += step) {
+        std::array<Val, N> col_vec{0};
+        for(size_t k = 0; k < n; ++k) col_vec[k] = mat2[k][c];
+        tp.enqueue(tile, c, i, std::min(n, i+step), col_vec);
+      }
+  };
+      
+  auto mul2 = [&](size_t rs, size_t re, size_t step) {
+    auto tile = [&] (const size_t i, const size_t n, const size_t cs, const size_t ce) {
+                    for(size_t j = cs; j < ce; ++j) {
+                       ans[i][j] = 0;
+                       for (size_t k = 0; k < n; ++k)
+                         ans[i][j] += mat1[i][k]*mat2[k][j];
+                    }
+                  };
+    for(auto i = rs; i < re; ++i) {
+      for(size_t c = 0; c < n; c += step)
+        tp.enqueue(tile, i, n, c, std::min(n, c+step));
+    }
+  };
+
+  auto mul = [&](const size_t rs, const size_t re, const size_t cs, const size_t ce) -> void {
+      // std::cerr << rs << ":" << re << ":" << cs << ":" << ce << ", n= " << n << std::endl;
               for(auto i = rs; i < re; ++i)
                 for(auto j = cs; j < ce; ++j) {
                   ans[i][j] = 0u;
@@ -45,36 +76,41 @@ decltype(auto) matmul_tp(const Matrix& mat1,
                     ans[i][j] += mat1[i][k]*mat2[k][j];
                 }
             };
-
-  const size_t step = 64;
+#if 0
+  const size_t step = static_cast<int>(sqrt(n));
   for(auto i = 0u; i < n; i += step)
     for(auto j = 0u; j < n; j += step) {
       tp.schedule(thp::make_task(mul, i, std::min(n, i+step), j, std::min(n, j+step)));
     }
-
+#endif
+  //mul2(0, n, 128);
+  mul3(0, n, 128);
   tp.drain();
 }
 
 int main(int argc, const char* const argv[])
 {
   // Initialize Google's logging library.
-  google::InitGoogleLogging(argv[0]);
+  //google::InitGoogleLogging(argv[0]);
 
   bool compare = false;
-
   try {
     // generate data
-    for(size_t n = 0; n < N; n += 256) {
+    for(size_t n = 128; n <= N; n += 128) {
       std::random_device r;
       std::default_random_engine engine(r());
       std::uniform_int_distribution<Val> dis(-4200, +4200);
+
+      rng::for_each(mat1, [](auto& m) { rng::fill(m, 0); });
+      rng::for_each(mat2, [](auto& m) { rng::fill(m, 0); });
+      rng::for_each(ans1, [](auto& m) { rng::fill(m, 0); });
+      rng::for_each(ans2, [](auto& m) { rng::fill(m, 0); });
+
       for(auto i = 0u; i < n; ++i) {
         auto& row1 = mat1[i];
         auto& row2 = mat2[i];
         std::generate_n(row1.begin(), n, [&] { return dis(engine); });
         std::generate_n(row2.begin(), n, [&] { return dis(engine); });
-        std::fill_n(ans1[i].begin(), n, 0);
-        std::fill_n(ans2[i].begin(), n, 0);
       }
       {
         thp::threadpool tp;
@@ -99,6 +135,7 @@ int main(int argc, const char* const argv[])
         bool passed = true;
         for(auto i = 0u; i < n; ++i)
           if (!std::equal(ans1[i].begin(), ans1[i].begin()+n, ans2[i].begin())) {
+            std::cerr << "failed at row " << i << std::endl;
             passed = false;
             break;
           }

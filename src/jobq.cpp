@@ -86,9 +86,8 @@ void job_queue::schedule_fn(task_scheduler* scheduler, std::stop_token st)
 }
 
 void job_queue::worker_fn(std::stop_token st) {
-  auto me = std::this_thread::get_id();
-
-  register_worker();
+  const auto me = std::this_thread::get_id();
+  register_worker(me);
 
   for(;;) {
     std::unique_ptr<executable> t{};
@@ -117,7 +116,7 @@ void job_queue::worker_fn(std::stop_token st) {
       cond_empty_.notify_all();
   }
 
-  deregister_worker();
+  deregister_worker(me);
 }
 
 bool job_queue::update_table() {
@@ -154,17 +153,15 @@ void job_queue::drain() {
   cond_empty_.wait(l, [this] { return !pending_tasks(); });
 }
 
-void job_queue::register_worker() {
+void job_queue::register_worker(const std::thread::id& tid) {
   std::lock_guard l(mu_);
-  auto tid = std::this_thread::get_id();
   worker_taskq_map_[0][tid] = 0;
   worker_taskq_map_[1][tid] = 0;
   ++registered_workers_;
 }
 
-void job_queue::deregister_worker() {
+void job_queue::deregister_worker(const std::thread::id& tid) {
   std::lock_guard l(mu_);
-  auto tid = std::this_thread::get_id();
   worker_taskq_map_[0][tid] = 0;
   worker_taskq_map_[1][tid] = 0;
   --registered_workers_;

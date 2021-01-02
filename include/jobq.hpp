@@ -164,8 +164,8 @@ public:
 
   bool is_stopped() const;
 
-  void register_worker();
-  void deregister_worker();
+  void register_worker(const std::thread::id&);
+  void deregister_worker(const std::thread::id&);
 
   ~job_queue() = default;
 

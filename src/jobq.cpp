@@ -48,7 +48,7 @@ void job_queue::compute_algo_stats(sched_algo_stats& stats) {
 } 
 
 void job_queue::compute_stats(jobq_stats& stats) {
-    // compute stats
+  // compute stats
   stats.ts = std::chrono::system_clock::now();
   stats.worker_2_q = *table_;
   compute_algo_stats(stats.algo);

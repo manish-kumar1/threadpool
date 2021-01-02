@@ -23,7 +23,7 @@ struct sched_algo_stats {
   {
     taskq_len.reserve(Static::queue_table_capacity());
   }
-  std::vector<unsigned> taskq_len;
+  std::vector<size_t> taskq_len;
   std::unordered_map<std::thread::id, int>** table;
   unsigned num_tasks;
 };

@@ -181,7 +181,7 @@ protected:
   constexpr task_queue& taskq_for(void) {
     using PriorityType = std::decay_t<typename TaskType::PriorityType>;
 
-    std::unique_lock l(mu_);
+    std::unique_lock l(mu_); // TODO: how to avoid this lock, PriorityType is known at compile time
     auto x = std::type_index(typeid(PriorityType));
     auto it = idx_.find(x);
     if (it == idx_.end()) {

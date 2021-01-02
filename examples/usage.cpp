@@ -131,7 +131,6 @@ int main(int argc, const char* const argv[])
     std::cout << "factorial(" << i << ") = " << factorial(i) << std::endl;
   });
 
-
   tp.shutdown();
   std::cerr << "main exit.." << std::endl;
 

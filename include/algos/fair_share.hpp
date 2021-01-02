@@ -2,21 +2,25 @@
 #define FAIRSHARE_HPP_
 
 #include <thread>
-#include <memory>
 #include <vector>
-#include <iostream>
+#include <random>
 #include "include/algos/schedule_algos.hpp"
 #include "include/statistics.hpp"
 
 namespace thp {
 namespace sched_algos {
 
-struct fairshare_algo : schedule_algo {
-  explicit fairshare_algo() {}
+class fairshare_algo : public schedule_algo {
+private:
+  std::random_device rd;
 
+public:
+  explicit fairshare_algo() : rd{} {}
+
+  // given length vector, assign workers to proper idx, default is 0
   void apply(const statistics& stats) override {
     const auto& taskq_len = stats.jobq.algo.taskq_len;
-    size_t i = 0u;
+    size_t i = rd() % taskq_len.size();
     size_t n = taskq_len.size();
 
     for(auto& w : **stats.jobq.algo.table) {

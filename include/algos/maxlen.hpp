@@ -14,7 +14,7 @@ namespace sched_algos {
 struct maxlen_algo : schedule_algo {
   explicit maxlen_algo() : last_idx_{0}, cur_idx_{0} {}
 
-  int best_queue_index(const std::vector<unsigned>& len) {
+  int best_queue_index(const std::vector<size_t>& len) {
     auto it = std::max_element(len.begin(), len.end());
 
     if (it == len.end())

@@ -93,7 +93,7 @@ int main(int argc, const char* const argv[])
   // Initialize Google's logging library.
   //google::InitGoogleLogging(argv[0]);
 
-  bool compare = false;
+  bool verify = false;
   try {
     // generate data
     for(size_t n = 128; n <= N; n += 128) {
@@ -130,16 +130,15 @@ int main(int argc, const char* const argv[])
         std::cerr << "normal: (" << n << "x" << n << ") = " << cu.get_ms() << " ms" << std::endl;
       }
 #endif
-      if (compare)
+      if (verify)
       {
         bool passed = true;
         for(auto i = 0u; i < n; ++i)
-          if (!std::equal(ans1[i].begin(), ans1[i].begin()+n, ans2[i].begin())) {
+          if (!rng::equal(ans1[i], ans2[i])) {
             std::cerr << "failed at row " << i << std::endl;
             passed = false;
             break;
           }
-        
         std::cerr << (passed ? "passed" : "failed") << std::endl;
       }
     }

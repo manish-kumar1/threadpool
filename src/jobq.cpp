@@ -35,7 +35,6 @@ job_queue::job_queue()
   idx_.reserve(Static::queue_table_capacity());
   tasks_qs_.emplace_back(new task_queue());
   idx_.emplace(std::make_pair(std::type_index(typeid(void)), 0));
-  idx_.emplace(std::make_pair(std::type_index(typeid(int)), 1));
 }
 
 void job_queue::compute_algo_stats(sched_algo_stats& stats) {

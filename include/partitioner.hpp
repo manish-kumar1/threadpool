@@ -49,5 +49,25 @@ public:
   constexpr inline bool operator()() { return cur == end; }
 };
 
+#if 0
+// partitioner : is a generator of views over a range, like split_view
+// algo: is a strategy to generate partition views
+
+template <std::input_iterator I, std::sentinel_for<I> S>
+struct partition_algo {
+
+};
+
+template <std::input_iterator I, std::sentinel_for<I> S>
+class partitioner {
+  I start;
+  S end;
+  std::unique_ptr<partition_algo> algo;
+
+  public:
+  constexpr explicit partitioner(I s, S e, part_algo<I,S> algo)
+};
+#endif
+
 } // namespace thp
 #endif // __PARTITIONER_HPP__

@@ -70,6 +70,7 @@ public:
   constexpr auto get_priority() const { return priority; }
 
   template<kncpt::PriorityTask T>
+  requires std::totally_ordered_with<PriorityType, typename T::PriorityType>
   constexpr std::strong_ordering operator <=> (const T& rhs) const
   {
     return this->get_priority() <=> rhs.get_priority();
@@ -84,7 +85,6 @@ public:
   virtual ~priority_task() = default;
 
 protected:
-//  simple_task<Ret> tak;
   Prio priority;
 };
 

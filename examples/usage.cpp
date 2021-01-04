@@ -9,8 +9,9 @@
 #include <glog/logging.h>
 
 #include "include/threadpool.hpp"
+#include "include/time_task.hpp"
 
-using namespace std::chrono;
+using namespace ::std::chrono;
 using namespace thp;
 
 // very inefficient prime checker to eat up cpu
@@ -100,6 +101,7 @@ int main(int argc, const char* const argv[])
   threadpool tp;
 
   auto hello = [] { std::cerr << "hello world" << std::endl; };
+  auto print = [] (std::string s) { std::cerr << "print(): " << s << std::endl; };
 
   auto p0 = make_task(hello);
 //  auto p1 = make_task<int>(factorial, 10); p1->set_priority(-42);
@@ -130,6 +132,14 @@ int main(int argc, const char* const argv[])
   tp.for_each(data.begin(), data.end(), [](int i) {
     std::cout << "factorial(" << i << ") = " << factorial(i) << std::endl;
   });
+
+  //make_task<system_clock>(fn).for(3s).until(5pm).on(cpu1).args(10);
+  //time_series_task<system_clock>(fn).at(4pm).until
+  auto now = system_clock::now();
+  auto p8 = std::make_unique<time_task<void, system_clock>>(print, "8"); p8->at(now+7s);
+  auto p9 = std::make_unique<time_series_task<void, system_clock>>(print, "9"); p9->at({now+5s, now+10s});
+  
+  tp.schedule(p8, p9);
 
   tp.shutdown();
   std::cerr << "main exit.." << std::endl;

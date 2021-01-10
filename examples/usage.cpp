@@ -138,9 +138,13 @@ int main(int argc, const char* const argv[])
   auto now = system_clock::now();
   auto p8 = std::make_unique<time_task<void, system_clock>>(print, "8"); p8->at(now+7s);
   auto p9 = std::make_unique<time_series_task<void, system_clock>>(print, "9"); p9->at({now+5s, now+10s, now+5s}); // 
+  auto p10 = std::make_unique<time_series_task<unsigned, system_clock>>(factorial, 12); p10->at({now+5s, now+10s, now+5s}); // 
   
-  auto&& [f8, f9] = tp.schedule(p8, p9);
-  for(auto&& f : *f9.get()) f.get();
+  auto&& [f10] = tp.schedule(p10);
+  auto f = f10.get();
+  for (int i = 0; i < 3; ++i) std::cout << "series: " << (*f)[i].get() << '\n';
+
+//  for(auto&& f : *f10.get()) std::cout << "series: " << f.get() << '\n';
 
   tp.shutdown();
   std::cerr << "main exit.." << std::endl;

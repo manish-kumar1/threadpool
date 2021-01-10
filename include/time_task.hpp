@@ -13,7 +13,7 @@
 
 #include "include/task_type.hpp"
 #include "include/traits.hpp"
-#include "include/future_ranges.hpp"
+#include "include/sync_container.hpp"
 
 namespace thp {
 
@@ -28,13 +28,13 @@ public:
   template <typename Fn, typename... Args>
   requires std::regular_invocable<Fn,Args...>
            && std::same_as<Ret, std::invoke_result_t<Fn,Args...>>
-  explicit time_task(Fn &&fn, Args &&... args)
+  constexpr explicit time_task(Fn &&fn, Args &&... args)
       : Base{std::forward<Fn>(fn), std::forward<Args>(args)...}
   {
     Base::set_priority(Clock::now());
   }
 
-  decltype(auto) at(TimePoint&& tp) {
+  constexpr decltype(auto) at(TimePoint&& tp) {
     Base::set_priority(std::forward<TimePoint>(tp));
     return *this;
   }
@@ -76,6 +76,7 @@ public:
   decltype(auto) at(std::initializer_list<TimePoint> at) {
     time_points = std::vector<TimePoint>{at};
     std::ranges::sort(time_points);
+    //results->resize(time_points.size());
     return *this;
   }
 
@@ -84,12 +85,14 @@ public:
   }
 
   void execute() override {
-    std::ranges::for_each(time_points, [this](auto&& tp) {
+    std::ranges::for_each(time_points, [this, idx=0](auto&& tp) mutable {
       //std::cerr << std::this_thread::get_id() << " : " <<
       // (tp-Clock::now()).count() << ", will sleep till " << std::endl;
+      results->put(this->pt.get_future());
+
       std::this_thread::sleep_until(tp);
       std::cerr << std::this_thread::get_id() << " : " << (tp-Clock::now()).count() << ", wakeup, execute " << std::endl;
-      results->put(this->pt.get_future());
+
       this->pt();
       this->pt.reset();
     });
@@ -100,8 +103,8 @@ public:
 protected:
   std::packaged_task<Ret()> pt;
   std::vector<TimePoint> time_points;
-  std::unique_ptr<sync_container<std::future<Ret>>> results;
-  std::promise<std::unique_ptr<sync_container<std::future<Ret>>>> ret;
+  std::shared_ptr<sync_container<std::future<Ret>>> results;
+  std::promise<std::shared_ptr<sync_container<std::future<Ret>>>> ret;
 //  std::shared_ptr<std::vector<std::future<Ret>> results;
 };
 

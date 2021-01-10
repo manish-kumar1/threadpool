@@ -6,7 +6,10 @@ namespace thp {
 // task interface
 struct executable {
   virtual void execute() = 0;
-  virtual std::ostream& info(std::ostream&) = 0;
+  virtual std::ostream& info(std::ostream& oss) {
+    oss << typeid(*this).name() << "\n";
+    return oss;
+  }
   virtual ~executable() = default;
 };
 

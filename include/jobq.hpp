@@ -178,7 +178,7 @@ protected:
   inline bool pending_tasks(void) { return num_tasks_ > 0; }
 
   template <typename TaskType>
-  constexpr task_queue& taskq_for(void) {
+  constexpr inline task_queue& taskq_for(void) {
     using PriorityType = std::decay_t<typename TaskType::PriorityType>;
 
     std::unique_lock l(mu_); // TODO: how to avoid this lock, PriorityType is known at compile time

@@ -1,10 +1,11 @@
 #ifndef TP_CONCEPTS_HPP_
 
 #include <concepts>
+#include <chrono>
 
 #include "include/executable.hpp"
 #include "include/traits.hpp"
-#include "include/task_type.hpp"
+//#include "include/task_type.hpp"
 
 namespace thp {
 namespace kncpt {
@@ -13,6 +14,7 @@ template <typename T>
 concept SimpleTask = std::is_base_of_v<executable, T> &&
   requires {
     typename T::ReturnType;
+    std::same_as<typename T::PriorityType, void>;
   };
 
 template <typename T>

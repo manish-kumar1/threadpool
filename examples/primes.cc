@@ -23,7 +23,8 @@ bool is_prime(unsigned n) {
     ret = true;
   else if (n%2 == 0)
     ret = false;
-  else {
+  else 
+  {
     for (unsigned i = 3; i < static_cast<unsigned>(1 + sqrt(n)); i += 2) {
       if (n % i == 0) {
         ret = false;
@@ -36,6 +37,7 @@ bool is_prime(unsigned n) {
 
 auto find_prime(unsigned s, unsigned e) {
   std::vector<unsigned> ret;
+  ret.reserve(static_cast<unsigned>(0.15*(e-s)));
   for (unsigned i = s; i < e; ++i)
     if (is_prime(i)) ret.push_back(i);
 
@@ -45,21 +47,22 @@ auto find_prime(unsigned s, unsigned e) {
 auto check_prime(thp::threadpool* tp) {
   const unsigned int times = 10000000; // 10 million
   std::vector<std::future<std::vector<unsigned>>> ret;
-  auto step = 125*1000;
+  auto step = 125*100;
   for (unsigned int i = 0; i < times; i += step) {
-      auto [fut] = tp->enqueue(find_prime, i, i+step);
+      auto [fut] = tp->enqueue(find_prime, i, std::min(i+step, times));
       ret.emplace_back(std::move(fut));
   }
-//  std::cerr << "check_prime created" << std::endl;
   tp->drain();
   return ret;
 }
 
 int main(int argc, const char* const argv[]) {
 //  google::InitGoogleLogging(argv[0]);
+  std::ios::sync_with_stdio(false);
+  std::cin.tie(&std::cout);
   util::clock_util<chrono::steady_clock> cp;
   try {
-    thp::threadpool tp(16);
+    thp::threadpool tp;
     cp.now();
     auto primes = check_prime(&tp);
     cp.now();

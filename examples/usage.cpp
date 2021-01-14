@@ -102,7 +102,6 @@ int main(int argc, const char* const argv[])
 
   auto hello = [] { std::cerr << "hello world" << std::endl; };
   auto print = [] (std::string s) { std::cerr << "print(): " << s << std::endl; };
-
   auto p0 = make_task(hello);
 //  auto p1 = make_task<int>(factorial, 10); p1->set_priority(-42);
   priority_task<unsigned, int> p1(factorial, 10); p1.set_priority(-42);
@@ -132,20 +131,24 @@ int main(int argc, const char* const argv[])
   tp.for_each(data.begin(), data.end(), [](int i) {
     std::cout << "factorial(" << i << ") = " << factorial(i) << std::endl;
   });
-
   //make_task<system_clock>(fn).for(3s).until(5pm).on(cpu1).args(10);
   //time_series_task<system_clock>(fn).at(4pm).until
   auto now = system_clock::now();
   auto p8 = std::make_unique<time_task<void, system_clock>>(print, "8"); p8->at(now+7s);
   auto p9 = std::make_unique<time_series_task<void, system_clock>>(print, "9"); p9->at({now+5s, now+10s, now+5s}); // 
-  auto p10 = std::make_unique<time_series_task<unsigned, system_clock>>(factorial, 12); p10->at({now+5s, now+10s, now+5s}); // 
-  
+  auto p10 = std::make_unique<time_series_task<unsigned, system_clock>>(factorial, 12); p10->at({now+5s, now+6s, now+5s, now+7s, now+8s}); //
+
   auto&& [f10] = tp.schedule(p10);
-  auto f = f10.get();
-  for (int i = 0; i < 3; ++i) std::cout << "series: " << (*f)[i].get() << '\n';
+  auto pf = f10.get();
+  //for (int i = 0; i < 3; ++i) std::cout << "series: " << (*f)[i].get() << '\n';
 
-//  for(auto&& f : *f10.get()) std::cout << "series: " << f.get() << '\n';
+  try {
+    for(auto&& f : *pf) std::cout << "series: " << f.get() << '\n';
+  } catch (std::exception& e) {
+    std::cerr << "exception: " << e.what() << std::endl;
+  }
 
+  std::cerr << "usage done\n";
   tp.shutdown();
   std::cerr << "main exit.." << std::endl;
 

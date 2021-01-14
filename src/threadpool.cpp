@@ -24,7 +24,6 @@ threadpool::threadpool(unsigned max_threads)
 {
   std::lock_guard<std::mutex> lck(mu_);
   auto sched_conf = platform::thread_config();
-  //sched_conf.set_affinity({0});
 
   for (size_t i = 0; i < max_threads_; ++i)
     pool_.start_thread(&job_queue::worker_fn, &jobq_, stop_src_.get_token());

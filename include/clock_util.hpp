@@ -7,7 +7,7 @@
 namespace thp {
 namespace util {
 
-template<typename Clock>
+template <typename Clock>
 class clock_util {
 public:
   constexpr explicit clock_util() : s {Clock::time_point::min()}, e{Clock::time_point::min()} {}

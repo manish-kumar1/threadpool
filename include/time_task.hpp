@@ -53,6 +53,8 @@ public:
 
 template <typename Ret, typename Clock = std::chrono::system_clock>
 class time_series_task : public virtual executable {
+  using ResultBuffer = sync_container<std::future<Ret>>;
+
 public:
   using ReturnType = Ret;
   using PriorityType = typename Clock::time_point;
@@ -64,7 +66,7 @@ public:
   explicit time_series_task(Fn &&fn, Args &&... args)
       : pt{std::bind(std::forward<Fn>(fn), std::forward<Args>(args)...)}
       , time_points{}
-      , results{new sync_container<std::future<Ret>>{}}
+      , results{new ResultBuffer(8)}
       , ret{}
   {
     ret.set_value(results);
@@ -76,7 +78,7 @@ public:
   decltype(auto) at(std::initializer_list<TimePoint> at) {
     time_points = std::vector<TimePoint>{at};
     std::ranges::sort(time_points);
-    //results->resize(time_points.size());
+    results->reserve(std::ranges::size(time_points));
     return *this;
   }
 
@@ -85,10 +87,10 @@ public:
   }
 
   void execute() override {
-    std::ranges::for_each(time_points, [this, idx=0](auto&& tp) mutable {
+    std::ranges::for_each(time_points, [&](auto&& tp) mutable {
       //std::cerr << std::this_thread::get_id() << " : " <<
       // (tp-Clock::now()).count() << ", will sleep till " << std::endl;
-      results->put(this->pt.get_future());
+      this->results->put(this->pt.get_future());
 
       std::this_thread::sleep_until(tp);
       std::cerr << std::this_thread::get_id() << " : " << (tp-Clock::now()).count() << ", wakeup, execute " << std::endl;
@@ -96,6 +98,7 @@ public:
       this->pt();
       this->pt.reset();
     });
+    std::cerr << "time task done" << std::endl;
   }
 
   virtual ~time_series_task() = default;
@@ -103,8 +106,8 @@ public:
 protected:
   std::packaged_task<Ret()> pt;
   std::vector<TimePoint> time_points;
-  std::shared_ptr<sync_container<std::future<Ret>>> results;
-  std::promise<std::shared_ptr<sync_container<std::future<Ret>>>> ret;
+  std::shared_ptr<ResultBuffer> results;
+  std::promise<std::shared_ptr<ResultBuffer>> ret;
 //  std::shared_ptr<std::vector<std::future<Ret>> results;
 };
 

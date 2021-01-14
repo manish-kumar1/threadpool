@@ -35,7 +35,7 @@ public:
                       std::forward<Args>(args)...));
   }
 
-  unsigned int size() {
+  decltype(auto) size() {
     std::lock_guard<std::mutex> lck(mu_);
     return workers_.size();
   }

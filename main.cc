@@ -24,7 +24,7 @@ unsigned factorial(unsigned n) {
 // threadpool -thread_config='conf.yaml' --enable_print
 int main(int argc, char* argv[])
 {
-  gflags::ParseCommandLineFlags(&argc, &argv, false);
+//  gflags::ParseCommandLineFlags(&argc, &argv, false);
 
   // Initialize Google's logging library.
   google::InitGoogleLogging(argv[0]);

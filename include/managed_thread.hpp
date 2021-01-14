@@ -21,7 +21,7 @@ struct managed_thread {
 
   virtual std::shared_ptr<configuration> get_config() = 0;
 
-  virtual ~managed_thread(){};
+  virtual ~managed_thread() = default;
 };
 
 namespace platform {

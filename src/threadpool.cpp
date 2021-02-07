@@ -9,31 +9,36 @@
 
 #include "include/threadpool.hpp"
 #include "include/worker_pool.hpp"
+#include "include/managed_stop_token.hpp"
 
 namespace thp {
 
 threadpool::threadpool(unsigned max_threads)
   : mu_{}
   , shutdown_cv_{}
-  , stop_src_{}
-  , stop_cb_{stop_src_.get_token(), [this] { stop(); }}
+  , stop_src_{std::make_shared<managed_stop_source>()}
+  , etc_stop_src_{std::make_shared<managed_stop_source>()}
+  , stop_cb_{stop_src_->get_token(), [this] { stop(); }}
   , jobq_{}
-  , scheduler_{}
-  , pool_{}
+  , worker_pool_{stop_src_}
+  , managers_{stop_src_}
+  , book_keepers_{stop_src_}
   , max_threads_{std::max(2u, max_threads)}
 {
   std::lock_guard<std::mutex> lck(mu_);
-  auto sched_conf = platform::thread_config();
+  auto worker_conf = platform::thread_config();
 
-  for (size_t i = 0; i < max_threads_; ++i)
-    pool_.start_thread(&job_queue::worker_fn, &jobq_, stop_src_.get_token());
+  worker_pool_.update_config(worker_conf);
+  //std::cerr << "thp: " << stop_src_.get() << ", " << stop_src_.use_count() << std::endl;
+  for (int i = 0; i < max_threads_; ++i)
+    worker_pool_.start_thread(&job_queue::worker_fn, &jobq_, stop_src_->get_managed_token());
 
-  pool_.start_thread(&job_queue::schedule_fn, &jobq_, &scheduler_, stop_src_.get_token()).update_config(sched_conf);
-  //pool_.start_thread(&threadpool::print, this, stop_src_.get_token(), std::ref(std::cerr));
+  managers_.start_thread(&job_queue::schedule_fn, &jobq_, stop_src_->get_managed_token());
+  //book_keepers_.start_thread(&threadpool::print, this, etc_stop_src_->get_managed_token(), std::ref(std::cerr));
 }
 
-void threadpool::print(std::stop_token st, std::ostream& oss) {
-  statistics stats;
+void threadpool::print(managed_stop_token st, std::ostream& oss) {
+//  statistics stats;
   std::vector<unsigned> worker_utilization;
 
   for (;;) {
@@ -41,7 +46,12 @@ void threadpool::print(std::stop_token st, std::ostream& oss) {
     shutdown_cv_.wait_for(l, Static::stats_collection_period());
     if (st.stop_requested())
       break;
-
+    if (st.pause_requested()) {
+      l.unlock();
+      st.pause();
+      l.lock();
+    }
+#if 0
     l.unlock();
 
     jobq_.copy_stats(stats.jobq);
@@ -49,7 +59,6 @@ void threadpool::print(std::stop_token st, std::ostream& oss) {
     worker_utilization.clear();
     worker_utilization.resize(stats.jobq.algo.taskq_len.size(), 0);
     auto start = std::chrono::system_clock::to_time_t(stats.jobq.ts);
-
     oss << "job queue stats at: " << std::asctime(std::localtime(&start));
     oss << "total tasks: " << stats.jobq.algo.num_tasks << '\n';
     //for(auto& p : stats.jobq.worker_2_q)
@@ -64,20 +73,38 @@ void threadpool::print(std::stop_token st, std::ostream& oss) {
           << " " << worker_utilization[i] << '\n';
 
     oss << std::endl;
+#endif
+    oss << "job_queue stats: " << std::endl;
   }
 }
 
 void threadpool::drain() { jobq_.drain(); }
 
 void threadpool::shutdown() {
-  drain();
-  stop_src_.request_stop();
+  stop_src_->request_stop();
+  etc_stop_src_->request_stop();
+  worker_pool_.shutdown();
+  managers_.shutdown();
+  book_keepers_.shutdown();
+}
+
+void threadpool::pause() {
+	//jobq_.close();
+	worker_pool_.pause();
+	managers_.pause();
+}
+
+void threadpool::resume() {
+  worker_pool_.resume();
+  managers_.resume();
 }
 
 void threadpool::stop() {
   jobq_.close();  
   jobq_.stop();
-  pool_.shutdown();
+  worker_pool_.shutdown();
+  managers_.shutdown();
+  book_keepers_.shutdown();
 }
 
 threadpool::~threadpool() {

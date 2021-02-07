@@ -31,6 +31,7 @@ int main(int argc, char* argv[])
   LOG(INFO) << "Hello from threadpool!";
   
   thp::threadpool tp;
+#if 0
   // simple task<ReturnType>
   auto p0 = thp::make_task([] { std::cerr << "Hello world" << std::endl; });
   // task with priority setup
@@ -43,7 +44,7 @@ int main(int argc, char* argv[])
 
   auto [f0, f1, f2] = tp.schedule(p0, p1, p2);
   auto futs = tp.schedule(std::move(tasks));
-
+#endif
   tp.drain();
   tp.shutdown();
 

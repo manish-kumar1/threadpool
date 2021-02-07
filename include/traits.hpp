@@ -10,6 +10,7 @@
 #include <type_traits>
 #include <vector>
 #include <functional>
+#include <tuple>
 
 #include "include/task_type.hpp"
 
@@ -40,7 +41,7 @@ inline constexpr bool is_shared_ptr_v = is_shared_ptr<T>::value;
 
 template <typename T>
 struct is_smart_ptr
-    : std::integral_constant<bool, is_unique_ptr_v<T> || is_shared_ptr_v<T>> {};
+    : std::integral_constant<bool, std::disjunction_v<is_unique_ptr<T>, is_shared_ptr<T>>> {};
 
 template <typename T> struct is_timepoint : std::false_type {};
 
@@ -62,6 +63,10 @@ struct is_vector<std::vector<T...>> : std::true_type {};
 
 template <typename... T>
 struct is_container : std::integral_constant<bool, is_vector<T...>::value> {};
+
+template<typename> struct is_tuple : std::false_type {};
+template<typename... T> struct is_tuple<std::tuple<T...>> : std::true_type {};
+
 #if 0
 template <typename T> struct is_simple_task : std::false_type{};
 template <typename T, typename P> struct is_priority_task : std::false_type{};
@@ -69,6 +74,30 @@ template <typename T, typename P> struct is_priority_task : std::false_type{};
 template <typename T> struct is_simple_task<simple_task<T>> : std::true_type{};
 template <typename T, typename P> struct is_priority_task<priority_task<T,P>> : std::true_type{};
 #endif
+
+template<typename T>
+struct FindTaskType_Impl;
+
+template<typename T>
+struct FindTaskType {
+  typedef FindTaskType_Impl<std::remove_cvref_t<T>>::type type;
+};
+
+template<typename T>
+struct FindTaskType_Impl<simple_task<T>> {
+  typedef simple_task<T> type;
+};
+
+template<typename T, typename P>
+struct FindTaskType_Impl<priority_task<T,P>> {
+  typedef priority_task<T,P> type;
+};
+
+template<typename T>
+struct FindTaskType_Impl<std::unique_ptr<T>> : FindTaskType_Impl<T> {};
+
+template<typename T>
+struct FindTaskType_Impl<std::vector<T>> : FindTaskType_Impl<T> {};
 
 } // namespace traits
 } // namespace thp

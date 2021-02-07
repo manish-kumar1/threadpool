@@ -4,8 +4,7 @@
 #include <chrono>
 
 #include "include/executable.hpp"
-#include "include/traits.hpp"
-//#include "include/task_type.hpp"
+//#include "include/traits.hpp"
 
 namespace thp {
 namespace kncpt {

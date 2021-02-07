@@ -12,37 +12,26 @@ namespace thp {
 namespace sched_algos {
 
 struct maxlen_algo : schedule_algo {
-  explicit maxlen_algo() : last_idx_{0}, cur_idx_{0} {}
 
-  int best_queue_index(const std::vector<size_t>& len) {
-    auto it = std::max_element(len.begin(), len.end());
-
-    if (it == len.end())
-      it = len.begin();
-
-    return std::distance(len.begin(), it);
+  void apply(statistics& stats) {
+    const auto& inputs = stats.jobq.in.qs;
+    auto& output = stats.jobq.out.output;
+    if (output.size() < stats.pool.num_workers) {
+      auto maxq = *std::ranges::max_element(inputs, {}, [](auto&& q) { return q->len(); });
+      auto n = std::min(maxq->len(), stats.pool.num_workers - output.size());
+      while(n-- > 0) {
+        std::unique_ptr<executable> t;
+        if (maxq->pop(t))
+          output.emplace_back(std::move(t));
+      }
+    }
   }
 
-  bool ok(const statistics& stats) override {
-    auto tmp = cur_idx_;
-    bool ret = (last_idx_ == (cur_idx_ = best_queue_index(stats.jobq.algo.taskq_len)));
-    last_idx_ = tmp;
-    return ret;
-  }
-
-  void apply(const statistics& stats) {
-    for(auto& w : **stats.jobq.algo.table)
-      w.second = cur_idx_;
-  }
-
-  int apply(const statistics& stats, std::thread::id tid)
+  int apply(statistics& stats, std::thread::id tid)
   {
-    (**stats.jobq.algo.table)[tid] = cur_idx_;
-    return cur_idx_;
+    return 0;
   }
 
-private:
-  int last_idx_, cur_idx_;
 };
 
 } // namespace sched_algos

@@ -10,11 +10,11 @@
 #include "include/managed_thread.hpp"
 
 namespace thp {
-
+#if 0
 class signal_handler : public platform::thread {
 public:
   explicit signal_handler(const platform::thread_config &conf)
-      : platform::thread(std::bind(&signal_handler::worker_fn, this)) {
+      : platform::thread(&signal_handler::worker_fn, this) {
     update_config(conf);
   }
 
@@ -40,7 +40,7 @@ private:
     }
   }
 };
-
+#endif
 } // namespace thp
 
 #endif /* SIGNAL_HANDLER_HPP_ */

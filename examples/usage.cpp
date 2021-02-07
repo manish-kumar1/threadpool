@@ -107,13 +107,13 @@ int main(int argc, const char* const argv[])
   priority_task<unsigned, int> p1(factorial, 10); p1.set_priority(-42);
 //  auto x = priority_task<int>(factorial, 10).priority(-42).run_on(cpu1).after(p0).before(p3).for(3s);
 //  auto x = priority_task<int>(factorial, 10).priority(-42).with_config(conf)
-  auto p2 = make_task<float>(factorial, 20); p2->set_priority(25.5f);
+  auto p2 = make_task<float>(factorial, 20); p2.set_priority(25.5f);
   auto p3 = make_task(check_prime, 100, std::ref(tp));
 
   //std::list<simple_task<unsigned>> p4; // debug why list, deque crashes
   std::vector<simple_task<unsigned>> p4;
-  p4.emplace_back(simple_task<unsigned>(factorial, 10));
-  p4.emplace_back(simple_task<unsigned>(factorial, 20));
+  //p4.emplace_back(simple_task<unsigned>(factorial, 10));
+  //p4.emplace_back(simple_task<unsigned>(factorial, 20));
 
   auto [f1] = tp.schedule(p1);
   //print_primes(f3);
@@ -123,7 +123,7 @@ int main(int argc, const char* const argv[])
 
   tp.drain();
 
-  auto p7 = make_task<system_clock::time_point>(check_prime, 1024, std::ref(tp)); p7->set_priority(system_clock::now()+5s);
+  auto p7 = make_task<system_clock::time_point>(check_prime, 1024, std::ref(tp)); p7.set_priority(system_clock::now()+5s);
   auto [f7] = tp.schedule(p7);
   print_primes(f7);
 
@@ -134,9 +134,10 @@ int main(int argc, const char* const argv[])
   //make_task<system_clock>(fn).for(3s).until(5pm).on(cpu1).args(10);
   //time_series_task<system_clock>(fn).at(4pm).until
   auto now = system_clock::now();
+  std::chrono::nanoseconds us(1);
   auto p8 = std::make_unique<time_task<void, system_clock>>(print, "8"); p8->at(now+7s);
-  auto p9 = std::make_unique<time_series_task<void, system_clock>>(print, "9"); p9->at({now+5s, now+10s, now+5s}); // 
-  auto p10 = std::make_unique<time_series_task<unsigned, system_clock>>(factorial, 12); p10->at({now+5s, now+6s, now+5s, now+7s, now+8s}); //
+  auto p9 = std::make_unique<time_series_task<void, system_clock>>(print, "9"); p9->at({now+5s, now+10s, now+5s}); //
+  auto p10 = std::make_unique<time_series_task<unsigned, system_clock>>(factorial, 12); p10->at({now+5*us, now+6*us, now+5*us, now+7*us, now+8*us}); //
 
   auto&& [f10] = tp.schedule(p10);
   auto pf = f10.get();

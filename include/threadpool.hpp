@@ -18,14 +18,19 @@
 #include "include/signal_handler.hpp"
 #include "include/task_type.hpp"
 #include "include/worker_pool.hpp"
+#include "include/task_factory.hpp"
 
 namespace thp {
 class threadpool {
 public:
   explicit threadpool(unsigned max_threads = std::thread::hardware_concurrency());
 
-  // waits till condition of no tasks is statisfied
+  // waits till condition of no tasks is satisfied
   void drain();
+
+  // pause
+  void pause();
+  void resume();
 
   // graceful shutdown
   void shutdown();
@@ -33,7 +38,16 @@ public:
   // could be heterogeneous task types
   template <typename... Args>
   constexpr decltype(auto) schedule(Args&&... args) {
-    return jobq_.insert(args...);
+    auto futs = std::make_tuple(jobq_.insert_task(args)...);
+    jobq_.notify_reschedule();
+    return futs;
+  }
+
+  template <typename Clock> 
+  constexpr decltype(auto) run_for(typename Clock::duration dur) {}
+
+  template <typename Task, typename...Callables>
+  constexpr decltype(auto) chain(Task&& t, Callables&&... fn) {
   }
 
   template <typename Fn, typename... Args>
@@ -102,7 +116,7 @@ public:
   ~threadpool();
 
 protected:
-  void print(std::stop_token, std::ostream&);
+  void print(managed_stop_token, std::ostream&);
 
   // quick shutdown, may not run all tasks
   void stop();
@@ -110,15 +124,15 @@ protected:
 private:
   mutable std::mutex mu_;
   std::condition_variable_any shutdown_cv_;
-  std::stop_source stop_src_;
+  std::shared_ptr<managed_stop_source> stop_src_, etc_stop_src_;
   std::stop_callback<std::function<void()>> stop_cb_;
-  job_queue jobq_;
   task_scheduler scheduler_;
-  worker_pool pool_;
-//  std::unique_ptr<signal_handler> sighandler_;
+  job_queue jobq_;
+  worker_pool worker_pool_, managers_, book_keepers_;
+  //std::unique_ptr<signal_handler> sighandler_;
   unsigned max_threads_;
 
-  TP_DISALLOW_COPY_ASSIGN(threadpool);
+  TP_DISALLOW_COPY_ASSIGN(threadpool)
 };
 
 } // namespace thp

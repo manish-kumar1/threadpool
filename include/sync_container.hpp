@@ -116,15 +116,15 @@ public:
 
 private:
   const T& accept(size_t at) const {
-    std::cerr << "const accept(" << at << ")" << at << ", " << cur_size << ", " << buf_len << std::endl;
     std::unique_lock l(mu);
+    std::cerr << "const accept(" << at << ")" << at << ", " << cur_size << ", " << buf_len << std::endl;
     cond.wait(l, [&] { return at < cur_size; });
     return *std::next(data.cbegin(), at);
   }
 
   T& accept(size_t at) {
-    std::cerr << "accept(" << at << ")" << at << ", " << cur_size << ", " << buf_len << std::endl;
     std::unique_lock l(mu);
+    std::cerr << "accept(" << at << ")" << at << ", " << cur_size << ", " << buf_len << std::endl;
     cond.wait(l, [&] { return at < cur_size; });
     return *std::next(data.begin(), at);
   }

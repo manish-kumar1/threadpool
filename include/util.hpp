@@ -18,7 +18,8 @@ namespace thp {
 namespace util {
 
 inline void notify_cv(std::condition_variable_any& cv, std::size_t N) {
-  N == 1 ? cv.notify_one() : cv.notify_all();
+  if (N > 1) cv.notify_all();
+  else if (N == 1) cv.notify_one();
 }
 
 template<typename InputIter, typename OutputIter, typename Predicate>

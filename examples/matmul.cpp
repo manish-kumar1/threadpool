@@ -37,18 +37,17 @@ decltype(auto) matmul_tp(const Matrix& mat1,
                          thp::threadpool& tp)
 {
   // mxn nxm => mxm
-  //std::vector<thp::simple_task<void>> tasks;
   auto mul3 = [&](const size_t cs, const size_t ce, const size_t step) {
-    auto tile = [&] (const size_t j, const size_t rs, const size_t re, const std::array<Val, N>& col) {
+    auto tile = [&] (const size_t j, const size_t rs, const size_t re, std::shared_ptr<std::array<Val, N>> col) {
       for (size_t i = rs; i < re; ++i) {
-        ans[i][j] = std::inner_product(mat1[i].begin(), mat1[i].begin()+n, col.cbegin(), 0, std::plus<>(), std::multiplies<>());
+        ans[i][j] = std::inner_product(mat1[i].begin(), mat1[i].begin()+n, (*col).cbegin(), 0, std::plus<>(), std::multiplies<>());
       }
     };
 
     for (auto c = cs; c < ce; ++c)
       for(size_t i = 0; i < n; i += step) {
-        std::array<Val, N> col_vec{0};
-        for(size_t k = 0; k < n; ++k) col_vec[k] = mat2[k][c];
+        auto col_vec = std::make_shared<std::array<Val, N>>();
+        rng::transform(mat2, col_vec->begin(), [c](auto&& r) { return r[c]; });
         tp.enqueue(tile, c, i, std::min(n, i+step), col_vec);
       }
   };
@@ -84,7 +83,7 @@ decltype(auto) matmul_tp(const Matrix& mat1,
     }
 #endif
   //mul2(0, n, 128);
-  mul3(0, n, 128);
+  mul3(0, n, 1024);
   tp.drain();
 }
 
@@ -96,7 +95,7 @@ int main(int argc, const char* const argv[])
   bool verify = false;
   try {
     // generate data
-    for(size_t n = 128; n <= N; n += 128) {
+    for(size_t n = 256; n <= N; n += 256) {
       std::random_device r;
       std::default_random_engine engine(r());
       std::uniform_int_distribution<Val> dis(-4200, +4200);

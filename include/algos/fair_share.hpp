@@ -4,6 +4,8 @@
 #include <thread>
 #include <vector>
 #include <random>
+#include <ranges>
+
 #include "include/algos/schedule_algos.hpp"
 #include "include/statistics.hpp"
 
@@ -17,35 +19,22 @@ private:
 public:
   explicit fairshare_algo() : rd{} {}
 
-  // given length vector, assign workers to proper idx, default is 0
-  void apply(const statistics& stats) override {
-    const auto& taskq_len = stats.jobq.algo.taskq_len;
-    size_t i = rd() % taskq_len.size();
-    size_t n = taskq_len.size();
+  void apply(statistics& stats) override {
+    const auto& inputs = stats.jobq.in.qs;
+    auto& output = stats.jobq.out.output;
+    auto n = output.size();
 
-    for(auto& w : **stats.jobq.algo.table) {
-      int idx = -1;
-      for(i = i == n ? 0 : i; i < n; ++i) {
-        if (taskq_len[i] > 0) {
-          idx = i++;
-          break;
-        }
-      }
-      if (idx == -1) {
-        for(i = 0; i < n; ++i) {
-          if (taskq_len[i] > 0) {
-            idx = i++;
-            break;
-          }
-        }
-      }
-      if (idx == -1) idx = 0;
-
-      w.second = idx;
+    if (output.size() < 2*stats.pool.num_workers) {
+      std::ranges::for_each(inputs, [&](auto&& q) {
+                   std::unique_ptr<executable> t;
+                   if (q->pop(t))
+                     output.emplace_back(std::move(t));
+               });
+      stats.jobq.out.new_tasks = output.size() - n;
     }
   }
       
-  int apply(const statistics& stats, std::thread::id tid) override {
+  int apply(statistics& stats, std::thread::id tid) override {
     return 0;
   }
 };

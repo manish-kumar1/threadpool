@@ -3,36 +3,26 @@
 
 #include <algorithm>
 #include <condition_variable>
-#include <exception>
-#include <functional>
 #include <future>
 #include <iterator>
 #include <memory>
 #include <tuple>
-#include <typeindex>
-#include <stop_token>
-#include <tuple>
 #include <type_traits>
+#include <chrono>
+#include <array>
 
+#include "include/scheduler.hpp"
 #include "include/traits.hpp"
 #include "include/task_queue.hpp"
-#include "include/priority_taskq.hpp"
 #include "include/task_type.hpp"
 #include "include/statistics.hpp"
-#include "include/scheduler.hpp"
 #include "include/util.hpp"
+#include "include/all_priority_types.hpp"
+#include "include/managed_stop_token.hpp"
 
 namespace thp {
 
 class threadpool;
-
-template<typename> struct is_tuple : std::false_type {};
-template<typename... T> struct is_tuple<std::tuple<T...>> : std::true_type {};
-
-
-template<typename T1, typename T2, typename = std::enable_if_t<
-  is_tuple<T1>::value && is_tuple<T2>::value>>
-static decltype(auto) operator + (T1&& t1, T2&& t2) { return std::tuple_cat(std::forward<T1>(t1), std::forward<T2>(t2)); }
 
 struct jobq_stopped_ex final : std::exception {
   const char *what() const noexcept override { return "jobq_stopped_ex"; }
@@ -42,170 +32,198 @@ struct jobq_closed_ex final : std::exception {
   const char *what() const noexcept override { return "jobq_closed_ex"; }
 };
 
-class job_queue {
+template<typename T>
+struct TaskQueueTuple;
+
+template<typename...Ts>
+struct TaskQueueTuple<std::tuple<Ts...>> {
+  using type = std::tuple<priority_taskq<Ts>...>;
+};
+
+using TaskQueueTupleType = TaskQueueTuple<AllPriorityTaskTupleType>::type;
+
+// job queue manages several task queues
+class job_queue : public std::enable_shared_from_this<job_queue> {
 public:
-  explicit job_queue();
+  explicit job_queue()
+  : mu{}
+  , wmtx{}
+  , num_tasks{0}
+  , scheduler{}
+  , task_qs{create_taskqs_tuple<AllPriorityTaskTupleType>(std::make_index_sequence<std::tuple_size_v<AllPriorityTaskTupleType>>{})}
+  , all_qs{}
+  , tasks{}
+  {
+	  create_taskqs_array(task_qs, std::make_index_sequence<std::tuple_size_v<AllPriorityTaskTupleType>>{});
+  }
 
   template <typename C>
   constexpr decltype(auto) insert_task(C&& t) {
-    using T = std::remove_cvref_t<decltype(t)>;
-    //std::cerr << typeid(T).name() << std::endl;
-    if constexpr (traits::is_smart_ptr<T>::value) {
-      using TaskType = std::decay_t<typename T::element_type>;
-      auto fut = t->future();
-      taskq_for<TaskType>().put(std::forward<T>(t));
-      num_tasks_ += 1;
-      cond_full_.notify_one();
-      return fut;
-    }
-    else if constexpr (traits::is_reference_wrapper<T>::value) {
-      //static_assert("reference_wrapper");
-      using TT = std::decay_t<typename T::type>;
-      auto fut = t.get().future();
-      taskq_for<TT>().put(std::make_unique<TT>(std::move(t.get())));
-      num_tasks_ += 1;
-      cond_full_.notify_one();
-      return fut;
-    }
-    else if constexpr (std::is_base_of_v<executable, T>) {
-      auto fut = t.future();
-      taskq_for<T>().put(std::make_unique<T>(std::move(t)));
-      num_tasks_ += 1;
-      cond_full_.notify_one();
-      return fut;
-    }
-    else if (traits::is_container<T>::value) {
-      using P = typename T::value_type;
+    using TaskType = traits::FindTaskType<C>::type;
 
-      if constexpr (traits::is_smart_ptr<P>::value) {
-        using TaskType = typename P::element_type;
-        using ReturnType = typename TaskType::ReturnType;
-  
-        static_assert(traits::is_smart_ptr<P>::value && std::is_base_of_v<executable, TaskType>);
-
-        auto N = t.size();
-        std::vector<std::future<ReturnType>> futs;
-        futs.reserve(N);
-        std::transform(t.begin(), t.end(), std::back_inserter(futs),
-                      [](auto&& w) { return w->future(); });
-    
-        taskq_for<TaskType>().insert(std::make_move_iterator(t.begin()),
-                                     std::make_move_iterator(t.end()));
-        num_tasks_ += N;
-        util::notify_cv(cond_full_, N);
-        return futs;
-      }
-      else if constexpr (std::is_base_of_v<executable, P>) {
-        using TaskType = std::remove_cvref_t<P>;
-        using ReturnType = typename TaskType::ReturnType;
-
-        auto N = t.size();
-        std::vector<std::future<ReturnType>> futs;
-        futs.reserve(N);
-        std::transform(t.begin(), t.end(), std::back_inserter(futs),
-                      [](auto&& w) { return w.future(); });
-
-        std::vector<std::unique_ptr<TaskType>> tasks;
-        std::transform(t.begin(), t.end(), std::back_inserter(tasks),
-                        [](auto&& w) { return std::make_unique<TaskType>(std::move(w)); });
-        taskq_for<TaskType>().insert(std::make_move_iterator(tasks.begin()),
-                                     std::make_move_iterator(tasks.end()));
-        num_tasks_ += N;
-        util::notify_cv(cond_full_, N);
-        return futs;
-      }
-      else
-        static_assert("type not supported");
-    }
-  else
-    static_assert("type not supported");
-  }
-
-  template <typename... Args>
-  constexpr decltype(auto) insert(Args&&... args) {
-    return (std::make_tuple() + ... + std::make_tuple(insert_task(std::forward<Args>(args))));
+    auto futs = collect_future(std::forward<C>(t));
+    num_tasks += taskq_for<TaskType>().put(std::forward<C>(t));
+    //post_insert(num_tasks);
+    return futs;
   }
 
 #if 0
-  template <typename... Args>
-  constexpr decltype(auto) insert(std::tuple<Args...>&& tasks) {
-    check_stop();
-    auto tup = std::apply(
-        [this](auto &&... x) {
-          return std::make_tuple(insert_task(std::move(x))...);
-        },
-        std::move(tasks));
-
-    num_tasks_ += std::tuple_size_v<decltype(tup)>;
-    cond_full_.notify_all();
+  template<typename Rep, typename Period>
+  bool normal_shutdown(const std::chrono::duration<Rep, Period>& rel_time) {
+    std::shared_lock l(mu);
+    return cond_stop.wait_for(l, rel_time, [this] {
+             return (registered_workers == 0) && !pending_tasks();
+           });
   }
 #endif
 
-  template<typename Rep, typename Period>
-  bool normal_shutdown(const std::chrono::duration<Rep, Period>& rel_time) {
-    std::shared_lock l(mu_);
-    return cond_stop_.wait_for(l, rel_time, [this] {
-             return (registered_workers_ == 0) && !pending_tasks();
-           });
-  }
+  //void copy_stats(jobq_stats& stats);
 
-  void copy_stats(jobq_stats& stats);
+  //void compute_stats_fn();
+  //void schedule_fn(task_scheduler*, std::stop_token st);
+  //void worker_fn(std::stop_token st);
 
-  void compute_stats_fn();
-  void schedule_fn(task_scheduler*, std::stop_token st);
-  void worker_fn(std::stop_token st);
+  //void request_reschedule();
+  //bool update_table();
 
-  void request_reschedule();
-  bool update_table();
-
-  void close();
-  void stop();
+  void close() {}
+  void stop() {}
   void drain();
 
   bool is_stopped() const;
 
-  void register_worker(const std::thread::id&);
-  void deregister_worker(const std::thread::id&);
+  void notify_reschedule()      { sched_cond.notify_one(); }
+
+  void schedule_fn(managed_stop_token st) {
+    statistics stats{ {std::chrono::system_clock::now(), {all_qs, num_tasks.load()}, {tasks, 0}}, {16, 16} };
+    //std::cerr << "schedule_fn: " << st << std::endl;
+    for(;;) {
+      thread_local bool ne = false;
+      {
+        std::shared_lock l(mu);
+        ne = sched_cond.wait_for(l, st, Static::scheduler_tick(),
+          [&] { return !empty(); });
+        if (st.stop_requested()) break;
+        if (st.pause_requested()) {
+          l.unlock();
+          st.pause();
+          l.lock();
+        }
+      }
+      if (ne)
+      {
+        std::scoped_lock lk(mu, wmtx);
+        scheduler.compute_stats(stats);
+        scheduler.apply(stats);
+      }
+      else
+        cond_empty.notify_one();
+      //if (stats.jobq.out.new_tasks) std::cerr << std::this_thread::get_id() << " notify cond_full: " << num_tasks.load() << std::endl;
+      util::notify_cv(cond_full, stats.jobq.out.new_tasks);
+    }
+  }
+
+  void worker_fn(managed_stop_token st) {
+    //std::cerr << "worker_fn: " << st << std::endl;
+    for(;;) {
+      std::unique_ptr<executable> t{nullptr};
+      {
+        std::unique_lock l(wmtx);
+        cond_full.wait(l, st, [&] {
+          return !tasks.empty();
+        });
+        if (st.stop_requested()) break;
+        if (st.pause_requested()) {
+          l.unlock();
+          st.pause();
+          l.lock();
+        }
+        t = std::move(tasks.front());
+        tasks.pop_front();
+        --num_tasks;
+      }
+      t->execute();
+      //std::cerr << std::this_thread::get_id() << " got task " << num_tasks.load() << std::endl;
+    }
+    //std::cerr << std::this_thread::get_id() << " done" << std::endl;
+  }
+
+  //void register_worker(const std::thread::id&);
+  //void deregister_worker(const std::thread::id&);
 
   ~job_queue() = default;
 
 protected:
-  void compute_algo_stats(sched_algo_stats& );
-  void compute_stats(jobq_stats& stats);
+  friend class scheduler;
 
-  void check_stop();
-
-  inline bool pending_tasks(void) { return num_tasks_ > 0; }
-
-  template <typename TaskType>
-  constexpr inline task_queue& taskq_for(void) {
-    using PriorityType = std::decay_t<typename TaskType::PriorityType>;
-
-    std::unique_lock l(mu_); // TODO: how to avoid this lock, PriorityType is known at compile time
-    auto x = std::type_index(typeid(PriorityType));
-    auto it = idx_.find(x);
-    if (it == idx_.end()) {
-      tasks_qs_.emplace_back(std::make_unique<priority_taskq>());
-      std::tie(it, std::ignore) = idx_.emplace(x, tasks_qs_.size() - 1);
-    }
-    return *tasks_qs_[it->second];
+  template<typename Tuple, std::size_t... I>
+  constexpr void create_taskqs_array(Tuple&& tup, std::index_sequence<I...>)
+  {
+    ((all_qs.push_back(std::addressof(std::get<I>(std::forward<Tuple>(tup))))), ...);
   }
 
+  template<typename Tuple, std::size_t...I>
+  constexpr TaskQueueTupleType create_taskqs_tuple(std::index_sequence<I...>) {
+    return std::make_tuple(priority_taskq<std::tuple_element_t<I, Tuple>>()...);
+  }
+
+  template <typename C>
+  constexpr decltype(auto) collect_future(C&& t)
+  {
+    using T = std::remove_cvref_t<decltype(t)>;
+
+    if constexpr (traits::is_unique_ptr<T>::value)                 { return t->future(); }
+    else if constexpr (traits::is_shared_ptr<T>::value)            { return t->future(); }
+    else if constexpr (traits::is_reference_wrapper<T>::value)     { return t.get().future(); }
+    else if constexpr (std::is_base_of_v<executable, T>)           { return t.future(); }
+    else if constexpr (traits::is_container<T>::value) {
+      using TaskType = traits::FindTaskType<std::remove_cvref_t<typename T::value_type>>::type;
+      using ReturnType = typename TaskType::ReturnType;
+      std::vector<std::future<ReturnType>> futs;
+      futs.reserve(t.size());
+      std::ranges::transform(t, std::back_inserter(futs),
+                             [&](auto&& x) { return collect_future(x); });
+      return futs;
+    }
+    else {
+      static_assert("type is not supported");
+    }
+  }
+
+  template <typename TaskType>
+  constexpr inline auto& taskq_for(void) {
+    using PriorityType = std::decay_t<typename TaskType::PriorityType>;
+    return std::get<priority_taskq<TaskType>>(task_qs);
+  }
+
+  void post_insert(std::size_t n) {
+    num_tasks += n;
+    util::notify_cv(cond_full, n);
+  }
+
+//  void compute_algo_stats(statistics& stats) {
+//    stats.num_tasks = num_tasks;
+//  }
+//
+//  void compute_stats(jobq_stats& stats) {
+//    compute_algo_stats(stats.algo);
+//  }
+
+  //void check_stop();
+
+  inline bool empty() const { return num_tasks == 0;   }
+
 private:
-  mutable std::shared_mutex mu_;
-  std::atomic<int> num_tasks_;
+  mutable std::shared_mutex mu, wmtx;
+  std::atomic<int> num_tasks;
+  task_scheduler scheduler;
   // task queues for different task types
-  std::unordered_map<std::type_index, int> idx_;
-  std::deque<std::unique_ptr<task_queue>> tasks_qs_;
-  // worker's task queue map
-  std::array<std::unordered_map<std::thread::id, int>, 2> worker_taskq_map_;
-  std::unordered_map<std::thread::id, int>* table_;
-  std::unordered_map<std::thread::id, int>* table_old_;
-  
-  std::condition_variable_any cond_empty_, cond_full_, cond_stop_, sched_cond_;
-  int registered_workers_;
-  bool closed_, stopped_;
-  bool reschedule_;
+  TaskQueueTupleType task_qs;
+  std::vector<task_queue*> all_qs;
+  std::deque<std::unique_ptr<executable>> tasks;
+  std::condition_variable_any cond_empty, cond_full, cond_stop, sched_cond;
+  int registered_workers;
+  bool closed, stopped;
 };
 
 } // namespace thp

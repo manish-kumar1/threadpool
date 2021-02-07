@@ -4,8 +4,10 @@
 #include <algorithm>
 #include <functional>
 #include <thread>
+#include <shared_mutex>
 
 #include "include/configuration.hpp"
+#include "include/managed_stop_source.hpp"
 
 namespace thp {
 // interface
@@ -16,7 +18,7 @@ struct managed_thread {
 
   virtual void join() = 0;
   virtual void stop() = 0;
-  virtual void start() = 0;
+  virtual void resume() = 0;
   virtual void pause() = 0;
 
   virtual std::shared_ptr<configuration> get_config() = 0;
@@ -29,10 +31,20 @@ namespace platform {
 // a unit of worker
 class thread : public thp::managed_thread {
 public:
-  template <typename Fn, typename... Args>
+  template <typename Fn, typename... Args, typename =
+		  std::enable_if_t<std::is_invocable_v<Fn, Args...>>>
   explicit thread(Fn &&fn, Args &&... args)
-      : config_{nullptr},
-        th_(std::forward<Fn>(fn), std::forward<Args>(args)...) {}
+  : src{}
+  , config_{nullptr}
+  , th_{create(std::forward<Fn>(fn), std::forward<Args>(args)...)}
+  {}
+
+  template <typename Fn, typename... Args>
+  explicit thread(std::shared_ptr<managed_stop_source> stop_src, Fn &&fn, Args &&... args)
+  : src{stop_src}
+  , config_{nullptr}
+  , th_{create(std::forward<Fn>(fn), std::forward<Args>(args)...)}
+  {}
 
   thread(thread &&) noexcept = default;
   thread &operator=(thread &&) noexcept = default;
@@ -40,14 +52,14 @@ public:
   thread(const thread &) = delete;
   thread &operator=(const thread &) = delete;
 
-  bool joinable() noexcept override                { return th_.joinable(); }
-  std::thread::id get_id() const noexcept override { return th_.get_id(); }
+  bool joinable() noexcept override                        { return th_.joinable(); }
+  std::thread::id get_id() const noexcept override         { return th_.get_id();   }
   std::thread::native_handle_type native_handle() override { return th_.native_handle(); }
   void join() override { if (joinable()) th_.join(); }
 
-  void stop() override { config_->cancel(this); }
-  void start() override {}
-  void pause() override {}
+  void stop() override   { src->request_stop();   }
+  void resume() override { src->request_resume(); }
+  void pause() override  { src->request_pause();  }
 
   void update_config(const thread_config &new_config) {
     if (!config_)
@@ -66,7 +78,17 @@ public:
     join();
   }
 
+protected:
+  template<typename Fn, typename... Args>
+  constexpr std::thread create(Fn&& fn, Args&&... args) {
+    //if constexpr (std::is_invocable_v<std::decay_t<Fn>, managed_stop_token, std::decay_t<Args>...>)
+      return std::thread(std::forward<Fn>(fn), std::forward<Args>(args)...);
+    //else
+    //  return std::thread(std::forward<Fn>(fn), std::forward<Args>(args)...);
+  }
+
 private:
+  std::shared_ptr<managed_stop_source> src;
   std::shared_ptr<configuration> config_;
   std::thread th_;
 };

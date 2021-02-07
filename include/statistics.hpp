@@ -1,12 +1,15 @@
 #ifndef STATISTICS_HPP__
 #define STATISTICS_HPP__
 
-#include <vector>
-#include <unordered_map>
+#include <array>
+#include <deque>
+#include <memory>
 #include <chrono>
-#include <thread>
 
 #include "include/configuration.hpp"
+#include "include/task_queue.hpp"
+#include "include/executable.hpp"
+#include "include/all_priority_types.hpp"
 
 namespace thp {
 
@@ -15,23 +18,20 @@ struct workerpool_stats {
   unsigned num_workers;
 };
 
-struct sched_algo_stats {
-  explicit sched_algo_stats()
-    : taskq_len{}
-    , table{nullptr}
-    , num_tasks{0}
-  {
-    taskq_len.reserve(Static::queue_table_capacity());
-  }
-  std::vector<size_t> taskq_len;
-  std::unordered_map<std::thread::id, int>** table;
-  unsigned num_tasks;
+struct outputs {
+  std::deque<std::unique_ptr<executable>>& output;
+  unsigned new_tasks;
+};
+
+struct inputs {
+  const std::vector<task_queue*>& qs;
+  int num_tasks;
 };
 
 struct jobq_stats {
   std::chrono::system_clock::time_point ts;
-  std::unordered_map<std::thread::id, int> worker_2_q;
-  sched_algo_stats algo;
+  inputs in;
+  outputs out;
 };
 
 struct statistics {

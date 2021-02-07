@@ -10,6 +10,7 @@
 #include <ranges>
 #include <algorithm>
 #include <initializer_list>
+//#include <syncstream>
 
 #include "include/task_type.hpp"
 #include "include/traits.hpp"
@@ -51,7 +52,7 @@ public:
   virtual ~time_task() = default;
 };
 
-template <typename Ret, typename Clock = std::chrono::system_clock>
+template <std::size_t N, typename Ret, typename Clock = std::chrono::system_clock>
 class time_series_task : public virtual executable {
   using ResultBuffer = sync_container<std::future<Ret>>;
 
@@ -66,7 +67,7 @@ public:
   explicit time_series_task(Fn &&fn, Args &&... args)
       : pt{std::bind(std::forward<Fn>(fn), std::forward<Args>(args)...)}
       , time_points{}
-      , results{new ResultBuffer(8)}
+      , results{new ResultBuffer(N)}
       , ret{}
   {
     ret.set_value(results);
@@ -93,7 +94,7 @@ public:
       this->results->put(this->pt.get_future());
 
       std::this_thread::sleep_until(tp);
-      std::cerr << std::this_thread::get_id() << " : " << (tp-Clock::now()).count() << ", wakeup, execute " << std::endl;
+      //std::osyncstream(std::cerr) << std::this_thread::get_id() << " : " << (tp-Clock::now()).count() << ", wakeup, execute " << std::endl;
 
       this->pt();
       this->pt.reset();

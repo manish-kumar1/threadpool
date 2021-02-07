@@ -7,7 +7,7 @@ namespace thp {
 struct executable {
   virtual void execute() = 0;
   virtual std::ostream& info(std::ostream& oss) {
-    oss << typeid(*this).name() << "\n";
+    oss << typeid(*this).name();
     return oss;
   }
   virtual ~executable() = default;

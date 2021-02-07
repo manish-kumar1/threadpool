@@ -9,7 +9,8 @@
 namespace thp {
 namespace sched_algos {
 
-struct first_avail_algo : schedule_algo {
+struct first_avail_algo : schedule_algo {};
+#if 0
   explicit first_avail_algo()
     : cur_idx_{0}
     , last_idx_{0}
@@ -44,7 +45,7 @@ struct first_avail_algo : schedule_algo {
 protected:
   size_t cur_idx_, last_idx_;
 };
-
+#endif
 } // namespace sched_algos
 } // namespace thp
 

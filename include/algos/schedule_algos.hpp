@@ -20,9 +20,9 @@ enum names : uint8_t
 
 // algo interface
 struct schedule_algo {
-  virtual bool ok(const statistics&) { return false; }
-  virtual void apply(const statistics& ) = 0;
-  virtual int apply(const statistics&, std::thread::id ) = 0;
+  virtual bool ok(statistics&) { return false; }
+  virtual void apply(statistics& ) = 0;
+  virtual int apply(statistics&, std::thread::id ) = 0;
 };
 
 } // namespace sched_algos

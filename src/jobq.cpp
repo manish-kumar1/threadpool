@@ -1,42 +1,12 @@
-#include <algorithm>
 #include <condition_variable>
 #include <exception>
-#include <functional>
-#include <future>
-#include <iterator>
 #include <memory>
-#include <tuple>
-#include <typeindex>
-#include <stop_token>
 
-#include "include/threadpool.hpp"
-#include "include/traits.hpp"
-#include "include/task_queue.hpp"
-#include "include/priority_taskq.hpp"
-#include "include/task_type.hpp"
-#include "include/worker_pool.hpp"
+#include "include/jobq.hpp"
 
 namespace thp {
 
-job_queue::job_queue()
-    : mu_{}
-    , num_tasks_{0}
-    , idx_{}
-    , tasks_qs_{}
-    , worker_taskq_map_{}
-    , table_{&worker_taskq_map_[0]}
-    , table_old_{&worker_taskq_map_[1]}
-    , cond_empty_{}, cond_full_{}, cond_stop_{}
-    , registered_workers_{0}
-    , closed_{false}
-    , stopped_{false}
-    , reschedule_{false}
-{
-  idx_.reserve(Static::queue_table_capacity());
-  tasks_qs_.emplace_back(new task_queue());
-  idx_.emplace(std::make_pair(std::type_index(typeid(void)), 0));
-}
-
+#if 0
 void job_queue::compute_algo_stats(sched_algo_stats& stats) {
   stats.taskq_len.clear();
   stats.taskq_len.resize(tasks_qs_.size());
@@ -92,6 +62,26 @@ void job_queue::worker_fn(std::stop_token st) {
     std::unique_ptr<executable> t{};
     {
       std::shared_lock l(mu_);
+      cond_full.wait(l, st, [] {
+        if (!(*table)[tidx]->pop(t)) {
+          ret = false;
+          reschedule = true;
+        }
+        return ret;
+      });
+      if (st.stop_requested()) break;
+    }
+  }
+}
+
+void job_queue::worker_fn(std::stop_token st) {
+  const auto me = std::this_thread::get_id();
+  register_worker(me);
+
+  for(;;) {
+    std::unique_ptr<executable> t{};
+    {
+      std::shared_lock l(mu_);
       cond_full_.wait(l, st, [&] {
         bool ret = true;
         if (!pending_tasks()) ret = false;
@@ -129,54 +119,57 @@ bool job_queue::update_table() {
 }
 
 void job_queue::close() {
-  std::unique_lock l(mu_);
-  closed_ = true;
+  std::unique_lock l(mu);
+  closed = true;
 }
 
 void job_queue::stop() {
   {
-    std::unique_lock l(mu_);
-    stopped_ = true;
+    std::unique_lock l(mu);
+    stopped = true;
   }
 
   do {
-    cond_full_.notify_all();
-    cond_empty_.notify_all();
+    cond_full.notify_all();
+    cond_empty.notify_all();
   }
   while(!normal_shutdown(Static::shutdown_grace_period()));
 }
+#endif
 
 void job_queue::drain() {
-  cond_full_.notify_all();
-  std::shared_lock l(mu_);
-  cond_empty_.wait(l, [this] { return !pending_tasks(); });
+  cond_full.notify_all();
+  std::shared_lock l(mu);
+  cond_empty.wait(l, [this] { return empty(); });
 }
 
-void job_queue::register_worker(const std::thread::id& tid) {
-  std::lock_guard l(mu_);
-  worker_taskq_map_[0][tid] = 0;
-  worker_taskq_map_[1][tid] = 0;
-  ++registered_workers_;
+#if 0
+constexpr std::size_t job_queue::register_worker(const std::thread::id& tid) {
+  std::lock_guard l(mu);
+  worker_tidx_map[tid] = register_workers++;
+  task_queue* q = std::addressof(std::get<0>(task_qs));
+  table_old.push_back(q);
+  table_cur.push_back(q);
+  return worker_tidx_map[tid];
 }
 
 void job_queue::deregister_worker(const std::thread::id& tid) {
   std::lock_guard l(mu_);
-  worker_taskq_map_[0][tid] = 0;
-  worker_taskq_map_[1][tid] = 0;
-  --registered_workers_;
+  --registered_workers;
 }
 
 void job_queue::check_stop() {
-  std::lock_guard l(mu_);
-  if (closed_)
+  std::lock_guard l(mu);
+  if (closed)
     throw jobq_closed_ex();
-  else if (stopped_)
+  else if (stopped)
     throw jobq_stopped_ex();
 }
 
 bool job_queue::is_stopped() const {
-  std::shared_lock l(mu_);
-  return stopped_;
+  std::shared_lock l(mu);
+  return stopped;
 }
 
+#endif
 } // namespace thp

@@ -14,23 +14,24 @@
 namespace thp {
 
 struct workerpool_stats {
-  unsigned num_threads;
-  unsigned num_workers;
+  std::size_t num_threads;
+  std::size_t num_workers;
 };
 
 struct outputs {
   std::deque<std::unique_ptr<executable>>& output;
-  unsigned new_tasks;
+  std::size_t new_tasks;
 };
 
 struct inputs {
   const std::vector<task_queue*>& qs;
-  int num_tasks;
+  const int num_tasks;
+  const int load_factor;
 };
 
 struct jobq_stats {
   std::chrono::system_clock::time_point ts;
-  inputs in;
+  const inputs in;
   outputs out;
 };
 

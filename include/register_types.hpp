@@ -8,21 +8,18 @@ namespace thp {
 namespace compile_time {
 
 template<typename T, typename Tup, std::size_t I = 0>
-constexpr decltype(auto) find() {
-  static_assert(I >= std::tuple_size<Tup>::value, "T is not in Tup");
-  if constexpr (std::is_same_v<T, std::tuple_element_t<I, Tup>>) {
-    return I;
-  } else {
+consteval std::size_t find() {
+  static_assert(I >= std::tuple_size_v<Tup>, "T is not in Tup");
+  if constexpr (I >= std::tuple_size_v<Tup>) return I;
+  else if constexpr (std::is_same_v<T, std::tuple_element_t<I, Tup>>) return I;
+  else
     return find<T, Tup, I+1>();
-  }
 }
 
 template<typename T, typename Tup>
-constexpr bool exists_in() {
-  return find<T, Tup>() < std::tuple_size<Tup>::value;
+consteval bool exists_in() {
+  return find<T, Tup>() < std::tuple_size_v<Tup>;
 }
-
-
 
 } // namespace compile_time
 } // namespace thp

@@ -7,10 +7,14 @@
 #include <iostream>
 namespace thp {
 
+// fwd declaration
 struct managed_stop_token;
 
+// implementation class
 struct managed_stop_source_impl
 {
+  friend class managed_stop_token;
+
   bool request_pause() noexcept {
     std::unique_lock l(mu);
     paused = true;
@@ -25,21 +29,18 @@ struct managed_stop_source_impl
     cond.notify_all();
   }
 
-  friend class managed_stop_token;
-
-  bool pause_requested() {
+  bool pause_requested() const {
     std::shared_lock l(mu);
     return paused;
   }
 
   void pause() {
 	  std::unique_lock l(mu);
-	  cond.wait(l, [&] { return paused; });
+	  cond.wait(l, [&] { return !paused; });
   }
 
 protected:
-
-  std::shared_mutex mu;
+  mutable std::shared_mutex mu;
   bool paused;
   std::condition_variable_any cond;
 };
@@ -96,6 +97,7 @@ struct managed_stop_source : std::stop_source, std::enable_shared_from_this<mana
 	}
 
 	void pause() {
+    impl->request_pause();
 		impl->pause();
 	}
 protected:

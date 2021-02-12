@@ -43,7 +43,7 @@ public:
   void execute() override {
     // std::cerr << std::this_thread::get_id() << " : " <<
     // (at-Clock::now()).count() << ", will sleep till " << std::endl;
-    std::this_thread::sleep_until(Base::get_priority());
+    std::this_thread::sleep_until(this->priority);
     // std::cerr << std::this_thread::get_id() << " : " <<
     // (at-Clock::now()).count() << ", wakeup, execute " << std::endl;
     Base::execute();

@@ -12,7 +12,8 @@ namespace thp {
 
 // task queue interface
 struct task_queue {
-  virtual bool pop(std::unique_ptr<executable>&) = 0;
+  virtual std::size_t pop(std::unique_ptr<executable>&) = 0;
+  virtual std::size_t pop_n(std::deque<std::unique_ptr<executable>>& out, std::size_t n = 1) = 0;
   virtual std::size_t len() const = 0;
   virtual bool empty() { return 0u == len(); }
   virtual ~task_queue() = default;
@@ -22,7 +23,7 @@ namespace details {
 // one executable container queue
 // class with mutex, implement custom move constructors, as
 // they are defaulted to delete
-template<typename Ret, typename Prio=void>
+template<typename Ret, typename Prio = void, typename Comp = std::less<priority_task<Ret, Prio>>>
 class priority_taskq : public task_queue {
 public:
   using PriorityTaskType = priority_task<Ret, Prio>;
@@ -52,27 +53,38 @@ public:
   std::size_t put(PriorityTaskType& p) {
     std::unique_lock l(mu);
     append(std::move(p));
-    std::ranges::push_heap(tasks, [](auto&& a, auto&& b) {
-      return a <=> b < 0;
-    });
+    std::ranges::push_heap(tasks, Comp());
     return 1;
   }
 
   std::size_t put(PriorityTaskType&& p) {
     std::unique_lock l(mu);
     append(std::move(p));
-    std::push_heap(tasks.begin(), tasks.end(), [](auto&& a, auto&& b) {
-      return a <=> b < 0;
-    });
+    std::ranges::push_heap(tasks, Comp());
     return 1;
   }
 
-  bool pop(std::unique_ptr<executable>& t) override {
+  std::size_t pop(std::unique_ptr<executable>& t) override {
     std::unique_lock l(mu);
-    std::pop_heap(tasks.begin(), tasks.end(), [](auto&& a, auto&& b) {
-      return a <=> b < 0;
-    });
-    return pop_back(t);
+    if (tasks.empty()) return 0;
+    std::ranges::pop_heap(tasks, Comp());
+    t = std::make_unique<PriorityTaskType>(std::move(tasks.back()));
+    tasks.pop_back();
+    return 1;
+  }
+
+  std::size_t pop_n(std::deque<std::unique_ptr<executable>>& out, std::size_t n = 1u) {
+    std::unique_lock l(mu);
+    if (tasks.empty()) return false;
+
+    n = std::min(n, tasks.size());
+
+    for(auto x = n; x > 0; --x) {
+      std::ranges::pop_heap(tasks, Comp());
+      out.emplace_back(std::make_unique<PriorityTaskType>(std::move(tasks.back())));
+      tasks.pop_back();
+    }
+    return n;
   }
 
   template<typename C, typename = std::enable_if_t<
@@ -82,9 +94,7 @@ public:
     std::unique_lock l(mu);
     auto n = c.size();
     tasks.insert(tasks.end(), std::make_move_iterator(c.begin()), std::make_move_iterator(c.end()));
-    std::push_heap(tasks.begin(), tasks.end(), [](auto&& a, auto&& b) {
-        return a <=> b < 0;
-      });
+    std::ranges::push_heap(tasks, Comp());
     return n;
   }
 
@@ -96,30 +106,6 @@ public:
   virtual ~priority_taskq() = default;
 
 protected:
-  template<typename InputIter>
-  task_queue& insert(InputIter s, InputIter e) { // check
-    std::unique_lock l(mu);
-    tasks.insert(tasks.end(), s, e);
-    std::push_heap(tasks.begin(), tasks.end(), [](auto&& a, auto&& b) {
-        return a <=> b < 0;
-    });
-    return *this;
-  }
-
-  void append(PriorityTaskType&& p) {
-    tasks.emplace_back(std::move(p));
-  }
-
-  bool pop_back(std::unique_ptr<executable>& t) {
-    bool ret = false;
-    if (!tasks.empty()) {
-      t = std::make_unique<PriorityTaskType>(std::move(tasks.back()));
-      tasks.pop_back();
-      ret = true;
-    }
-    return ret;
-  }
-
   mutable std::shared_mutex mu; // all mutex type are neither copyable nor movable
   std::deque<PriorityTaskType> tasks;
 };
@@ -157,14 +143,31 @@ public:
     return 1;
   }
 
-  void put(PriorityTaskType&& p) {
+  std::size_t put(PriorityTaskType&& p) {
     std::unique_lock l(mu);
     tasks.emplace_back(std::move(p));
+    return 1;
   }
 
-  bool pop(std::unique_ptr<executable>& t) override {
+  std::size_t pop(std::unique_ptr<executable>& t) override {
     std::unique_lock l(mu);
-    return pop_back(t);
+    if (tasks.empty()) return 0;
+    t = std::make_unique<PriorityTaskType>(std::move(tasks.back()));
+    tasks.pop_back();
+    return 1;
+  }
+
+  std::size_t pop_n(std::deque<std::unique_ptr<executable>>& out, std::size_t n = 1u) {
+    std::unique_lock l(mu);
+    if (tasks.empty()) return false;
+
+    n = std::min(n, tasks.size());
+
+    for(auto x = n; x > 0; --x) {
+      out.emplace_back(std::make_unique<PriorityTaskType>(std::move(tasks.back())));
+      tasks.pop_back();
+    }
+    return n;
   }
 
   template<typename C, typename = std::enable_if_t<
@@ -185,16 +188,6 @@ public:
   virtual ~priority_taskq() = default;
 
 protected:
-  bool pop_back(std::unique_ptr<executable>& t) {
-    bool ret = false;
-    if (!tasks.empty()) {
-      t = std::make_unique<PriorityTaskType>(std::move(tasks.back()));
-      tasks.pop_back();
-      ret = true;
-    }
-    return ret;
-  }
-
   mutable std::shared_mutex mu; // all mutex type are neither copyable nor movable
   std::deque<PriorityTaskType> tasks;
 };

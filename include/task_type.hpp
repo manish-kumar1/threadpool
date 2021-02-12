@@ -156,11 +156,13 @@ protected:
 };
 
 template<typename T>
-struct simple_task : priority_task<T, void> {
+using simple_task  = priority_task<T, void>;
+#if 0
+{
   using ReturnType = priority_task<T, void>::ReturnType;
   using PriorityType = priority_task<T, void>::PriorityType;
 };
-
+#endif
 } // namespace thp
 
 #endif // TASK_TYPE_HPP_

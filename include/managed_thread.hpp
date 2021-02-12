@@ -34,14 +34,14 @@ public:
   template <typename Fn, typename... Args, typename =
 		  std::enable_if_t<std::is_invocable_v<Fn, Args...>>>
   explicit thread(Fn &&fn, Args &&... args)
-  : src{}
+  : src_{std::make_shared<managed_stop_source>()}
   , config_{nullptr}
   , th_{create(std::forward<Fn>(fn), std::forward<Args>(args)...)}
   {}
 
   template <typename Fn, typename... Args>
   explicit thread(std::shared_ptr<managed_stop_source> stop_src, Fn &&fn, Args &&... args)
-  : src{stop_src}
+  : src_{stop_src}
   , config_{nullptr}
   , th_{create(std::forward<Fn>(fn), std::forward<Args>(args)...)}
   {}
@@ -57,9 +57,9 @@ public:
   std::thread::native_handle_type native_handle() override { return th_.native_handle(); }
   void join() override { if (joinable()) th_.join(); }
 
-  void stop() override   { src->request_stop();   }
-  void resume() override { src->request_resume(); }
-  void pause() override  { src->request_pause();  }
+  void stop() override   { src_->request_stop();   }
+  void resume() override { src_->request_resume(); }
+  void pause() override  { src_->request_pause();  }
 
   void update_config(const thread_config &new_config) {
     if (!config_)
@@ -81,14 +81,16 @@ public:
 protected:
   template<typename Fn, typename... Args>
   constexpr std::thread create(Fn&& fn, Args&&... args) {
-    //if constexpr (std::is_invocable_v<std::decay_t<Fn>, managed_stop_token, std::decay_t<Args>...>)
+    using Tup = std::tuple<Args...>;
+    using LastType = std::tuple_element_t<std::tuple_size_v<Tup> - 1, Tup>;
+    if constexpr (std::is_same_v<LastType, managed_stop_token>)
       return std::thread(std::forward<Fn>(fn), std::forward<Args>(args)...);
-    //else
-    //  return std::thread(std::forward<Fn>(fn), std::forward<Args>(args)...);
+    else
+      return std::thread(std::forward<Fn>(fn), std::forward<Args>(args)..., src_->get_managed_token());
   }
 
 private:
-  std::shared_ptr<managed_stop_source> src;
+  std::shared_ptr<managed_stop_source> src_;
   std::shared_ptr<configuration> config_;
   std::thread th_;
 };

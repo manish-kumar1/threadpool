@@ -15,7 +15,7 @@
 namespace rng = std::ranges;
 
 using Val = int;
-constexpr size_t N = 1024;
+constexpr size_t N = 256*4;
 using Matrix = std::array<std::array<Val, N>, N>;
 
 Matrix mat1, mat2, ans1, ans2;
@@ -83,7 +83,7 @@ decltype(auto) matmul_tp(const Matrix& mat1,
     }
 #endif
   //mul2(0, n, 128);
-  mul3(0, n, 1024);
+  mul3(0, n, 1024u);
   tp.drain();
 }
 

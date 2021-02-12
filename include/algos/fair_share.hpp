@@ -23,8 +23,9 @@ public:
     const auto& inputs = stats.jobq.in.qs;
     auto& output = stats.jobq.out.output;
     auto n = output.size();
+    auto expected_items = stats.jobq.in.load_factor * stats.pool.num_workers;
 
-    if (output.size() < 2*stats.pool.num_workers) {
+    if (output.size() < expected_items) {
       std::ranges::for_each(inputs, [&](auto&& q) {
                    std::unique_ptr<executable> t;
                    if (q->pop(t))

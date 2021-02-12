@@ -16,13 +16,10 @@ namespace thp {
 threadpool::threadpool(unsigned max_threads)
   : mu_{}
   , shutdown_cv_{}
-  , stop_src_{std::make_shared<managed_stop_source>()}
-  , etc_stop_src_{std::make_shared<managed_stop_source>()}
-  , stop_cb_{stop_src_->get_token(), [this] { stop(); }}
   , jobq_{}
-  , worker_pool_{stop_src_}
-  , managers_{stop_src_}
-  , book_keepers_{stop_src_}
+  , worker_pool_{}
+  , managers_{}
+  , book_keepers_{}
   , max_threads_{std::max(2u, max_threads)}
 {
   std::lock_guard<std::mutex> lck(mu_);
@@ -30,14 +27,14 @@ threadpool::threadpool(unsigned max_threads)
 
   worker_pool_.update_config(worker_conf);
   //std::cerr << "thp: " << stop_src_.get() << ", " << stop_src_.use_count() << std::endl;
-  for (int i = 0; i < max_threads_; ++i)
-    worker_pool_.start_thread(&job_queue::worker_fn, &jobq_, stop_src_->get_managed_token());
+  for (unsigned i = 0; i < max_threads_; ++i)
+    worker_pool_.start_thread(&job_queue::worker_fn, &jobq_);
 
-  managers_.start_thread(&job_queue::schedule_fn, &jobq_, stop_src_->get_managed_token());
-  //book_keepers_.start_thread(&threadpool::print, this, etc_stop_src_->get_managed_token(), std::ref(std::cerr));
+  managers_.start_thread(&job_queue::schedule_fn, &jobq_);
+  //book_keepers_.start_thread(&threadpool::print, this, std::ref(std::cerr));
 }
 
-void threadpool::print(managed_stop_token st, std::ostream& oss) {
+void threadpool::print(std::ostream& oss, managed_stop_token st) {
 //  statistics stats;
   std::vector<unsigned> worker_utilization;
 
@@ -81,8 +78,6 @@ void threadpool::print(managed_stop_token st, std::ostream& oss) {
 void threadpool::drain() { jobq_.drain(); }
 
 void threadpool::shutdown() {
-  stop_src_->request_stop();
-  etc_stop_src_->request_stop();
   worker_pool_.shutdown();
   managers_.shutdown();
   book_keepers_.shutdown();

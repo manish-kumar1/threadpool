@@ -5,47 +5,30 @@
 
 #include "include/algos/schedule_algos.hpp"
 #include "include/statistics.hpp"
+#include "include/task_queue.hpp"
 
 namespace thp {
 namespace sched_algos {
 
-struct first_avail_algo : schedule_algo {};
-#if 0
-  explicit first_avail_algo()
-    : cur_idx_{0}
-    , last_idx_{0}
-  {}
-
-  size_t best_idx(const statistics& stats) {
-    auto& v = stats.jobq.algo.taskq_len;
-    auto it = std::find_if(v.begin(), v.end(), [](auto&& x) { return x > 0; });
-    if (it == v.end())
-      it = v.begin();
-
-    return std::distance(v.begin(), it);
-  }
-
-  bool ok(const statistics& stats) {
-    auto tmp = cur_idx_;
-    bool ret = (last_idx_ == (cur_idx_ = best_idx(stats)));
-    last_idx_ = tmp;
-    return ret;
-  }
-
-  void apply(const statistics& stats) override {
-    for(auto& p : **stats.jobq.algo.table) {
-      p.second = cur_idx_;
+struct first_avail_algo : schedule_algo {
+  void apply(statistics& stats) override {
+    const auto& inputs = stats.jobq.in.qs;
+    auto& output = stats.jobq.out.output;
+    auto expected_items = stats.jobq.in.load_factor * stats.pool.num_workers;
+    if (output.size() < expected_items) {
+      auto fq = std::ranges::find_if(inputs, [](auto&& x) { return x > 0; }, &task_queue::len);
+      if (fq != inputs.end())
+        stats.jobq.out.new_tasks = (*fq)->pop_n(output, expected_items);
     }
   }
- 
-  int apply(const statistics& stats, std::thread::id tid) override {
-    (**stats.jobq.algo.table)[tid] = cur_idx_;
-    return cur_idx_;
+
+  int apply(statistics& stats, std::thread::id tid) override {
+    return 0;
   }
 protected:
   size_t cur_idx_, last_idx_;
 };
-#endif
+
 } // namespace sched_algos
 } // namespace thp
 

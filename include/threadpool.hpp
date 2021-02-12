@@ -84,7 +84,7 @@ public:
     };
 
     auto reduce_task = [&]() {
-      std::vector<std::unique_ptr<simple_task<T>>> tasks;
+      std::vector<simple_task<T>> tasks;
       tasks.reserve(part.count());
 
 #if 0
@@ -116,7 +116,7 @@ public:
   ~threadpool();
 
 protected:
-  void print(managed_stop_token, std::ostream&);
+  void print(std::ostream&, managed_stop_token);
 
   // quick shutdown, may not run all tasks
   void stop();
@@ -125,7 +125,7 @@ private:
   mutable std::mutex mu_;
   std::condition_variable_any shutdown_cv_;
   std::shared_ptr<managed_stop_source> stop_src_, etc_stop_src_;
-  std::stop_callback<std::function<void()>> stop_cb_;
+  //std::stop_callback<std::function<void()>> stop_cb_;
   task_scheduler scheduler_;
   job_queue jobq_;
   worker_pool worker_pool_, managers_, book_keepers_;

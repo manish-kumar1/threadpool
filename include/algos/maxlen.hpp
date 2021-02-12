@@ -16,14 +16,10 @@ struct maxlen_algo : schedule_algo {
   void apply(statistics& stats) {
     const auto& inputs = stats.jobq.in.qs;
     auto& output = stats.jobq.out.output;
-    if (output.size() < stats.pool.num_workers) {
-      auto maxq = *std::ranges::max_element(inputs, {}, [](auto&& q) { return q->len(); });
-      auto n = std::min(maxq->len(), stats.pool.num_workers - output.size());
-      while(n-- > 0) {
-        std::unique_ptr<executable> t;
-        if (maxq->pop(t))
-          output.emplace_back(std::move(t));
-      }
+    auto expected_items = stats.jobq.in.load_factor * stats.pool.num_workers;
+    if (output.size() < expected_items) {
+      auto maxq = *std::ranges::max_element(inputs, {}, &task_queue::len);
+      stats.jobq.out.new_tasks = maxq->pop_n(output, expected_items);
     }
   }
 

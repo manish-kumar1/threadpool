@@ -40,17 +40,19 @@ struct TaskQueueTuple<std::tuple<Ts...>> {
   using type = std::tuple<priority_taskq<Ts>...>;
 };
 
-using TaskQueueTupleType = TaskQueueTuple<AllPriorityTaskTupleType>::type;
 
 // job queue manages several task queues
 class job_queue : public std::enable_shared_from_this<job_queue> {
+  using TaskQueueTupleType = TaskQueueTuple<AllPriorityTaskTupleType>::type;
+  inline consteval decltype(auto) static TaskQueueTupleSize() { return std::tuple_size_v<TaskQueueTupleType>; }
+
 public:
   explicit job_queue()
   : mu{}
   , wmtx{}
   , num_tasks{0}
   , scheduler{}
-  , task_qs{create_taskqs_tuple<AllPriorityTaskTupleType>(std::make_index_sequence<std::tuple_size_v<AllPriorityTaskTupleType>>{})}
+  , task_qs{create_taskqs_tuple<AllPriorityTaskTupleType>(std::make_index_sequence<TaskQueueTupleSize()>{})}
   , all_qs{}
   , tasks{}
   {
@@ -60,10 +62,8 @@ public:
   template <typename C>
   constexpr decltype(auto) insert_task(C&& t) {
     using TaskType = traits::FindTaskType<C>::type;
-
     auto futs = collect_future(std::forward<C>(t));
     num_tasks += taskq_for<TaskType>().put(std::forward<C>(t));
-    //post_insert(num_tasks);
     return futs;
   }
 
@@ -95,14 +95,13 @@ public:
   void notify_reschedule()      { sched_cond.notify_one(); }
 
   void schedule_fn(managed_stop_token st) {
-    statistics stats{ {std::chrono::system_clock::now(), {all_qs, num_tasks.load()}, {tasks, 0}}, {16, 16} };
-    //std::cerr << "schedule_fn: " << st << std::endl;
+    statistics stats{ {std::chrono::system_clock::now(), {all_qs, num_tasks.load(), 2}, {tasks, 0}}, {16, 16} };
+
     for(;;) {
       thread_local bool ne = false;
       {
         std::shared_lock l(mu);
-        ne = sched_cond.wait_for(l, st, Static::scheduler_tick(),
-          [&] { return !empty(); });
+        ne = sched_cond.wait_for(l, st, Static::scheduler_tick(), [&] { return !empty(); });
         if (st.stop_requested()) break;
         if (st.pause_requested()) {
           l.unlock();
@@ -148,9 +147,6 @@ public:
     //std::cerr << std::this_thread::get_id() << " done" << std::endl;
   }
 
-  //void register_worker(const std::thread::id&);
-  //void deregister_worker(const std::thread::id&);
-
   ~job_queue() = default;
 
 protected:
@@ -159,7 +155,8 @@ protected:
   template<typename Tuple, std::size_t... I>
   constexpr void create_taskqs_array(Tuple&& tup, std::index_sequence<I...>)
   {
-    ((all_qs.push_back(std::addressof(std::get<I>(std::forward<Tuple>(tup))))), ...);
+    all_qs.reserve(TaskQueueTupleSize());
+    ((all_qs.emplace_back(std::addressof(std::get<I>(std::forward<Tuple>(tup))))), ...);
   }
 
   template<typename Tuple, std::size_t...I>
@@ -192,13 +189,7 @@ protected:
 
   template <typename TaskType>
   constexpr inline auto& taskq_for(void) {
-    using PriorityType = std::decay_t<typename TaskType::PriorityType>;
     return std::get<priority_taskq<TaskType>>(task_qs);
-  }
-
-  void post_insert(std::size_t n) {
-    num_tasks += n;
-    util::notify_cv(cond_full, n);
   }
 
 //  void compute_algo_stats(statistics& stats) {

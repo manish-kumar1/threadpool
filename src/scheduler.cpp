@@ -15,8 +15,8 @@ task_scheduler::task_scheduler()
   : all_algos{}
   , algo{nullptr}
   {
-    //all_algos[sched_algos::names::eFirstAvailable].reset(new sched_algos::first_avail_algo());
-    //all_algos[sched_algos::names::eMaxLen].reset(new sched_algos::maxlen_algo());
+    all_algos[sched_algos::names::eFirstAvailable].reset(new sched_algos::first_avail_algo());
+    all_algos[sched_algos::names::eMaxLen].reset(new sched_algos::maxlen_algo());
     all_algos[sched_algos::names::eFairShare].reset(new sched_algos::fairshare_algo());
     algo = all_algos[sched_algos::names::eFairShare];
   }

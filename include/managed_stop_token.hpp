@@ -18,7 +18,7 @@ struct managed_stop_token : std::stop_token {
 
   managed_stop_token(managed_stop_token&& rhs) : std::stop_token(rhs) {
     source = std::move(rhs.source);
-    //rhs.source = nullptr;
+    rhs.source = nullptr;
   }
 
   friend std::ostream& operator << (std::ostream& oss, const managed_stop_token& tok) {
@@ -31,10 +31,13 @@ struct managed_stop_token : std::stop_token {
     return *this;
   }
 
-  bool pause_requested() { return source->pause_requested(); }
+  bool pause_requested() const { return source->pause_requested(); }
+
   void pause() {
     source->pause();
   }
+
+  virtual ~managed_stop_token() = default;
 
 protected:
   std::shared_ptr<managed_stop_source> source;

@@ -8,8 +8,8 @@ namespace thp {
 namespace compile_time {
 
 template<typename T, typename Tup, std::size_t I = 0>
-consteval std::size_t find() {
-  static_assert(I >= std::tuple_size_v<Tup>, "T is not in Tup");
+constexpr std::size_t find() {
+  //static_assert(I >= std::tuple_size_v<Tup>, "T is not in Tup");
   if constexpr (I >= std::tuple_size_v<Tup>) return I;
   else if constexpr (std::is_same_v<T, std::tuple_element_t<I, Tup>>) return I;
   else
@@ -17,7 +17,7 @@ consteval std::size_t find() {
 }
 
 template<typename T, typename Tup>
-consteval bool exists_in() {
+constexpr bool exists_in() {
   return find<T, Tup>() < std::tuple_size_v<Tup>;
 }
 

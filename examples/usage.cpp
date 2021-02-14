@@ -96,8 +96,6 @@ unsigned factorial(unsigned n) {
 
 int main(int argc, const char* const argv[])
 {
-  //google::InitGoogleLogging(argv[0]);
-
   threadpool tp;
 
   auto hello = [] { std::cerr << "hello world" << std::endl; };
@@ -136,8 +134,8 @@ int main(int argc, const char* const argv[])
   auto now = system_clock::now();
   std::chrono::nanoseconds us(1);
   auto p8 = std::make_unique<time_task<void, system_clock>>(print, "8"); p8->at(now+7s);
-  auto p9 = std::make_unique<time_series_task<void, system_clock>>(print, "9"); p9->at({now+5s, now+10s, now+5s}); //
-  auto p10 = std::make_unique<time_series_task<unsigned, system_clock>>(factorial, 12); p10->at({now+5*us, now+6*us, now+5*us, now+7*us, now+8*us}); //
+  auto p9 = std::make_unique<time_series_task<3, void, system_clock>>(print, "9"); p9->at({now+5s, now+10s, now+5s}); //
+  auto p10 = std::make_unique<time_series_task<5, unsigned, system_clock>>(factorial, 12); p10->at({now+5*us, now+6*us, now+5*us, now+7*us, now+8*us}); //
 
   auto&& [f10] = tp.schedule(p10);
   auto pf = f10.get();

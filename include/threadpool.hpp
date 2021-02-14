@@ -47,8 +47,7 @@ public:
   constexpr decltype(auto) run_for(typename Clock::duration dur) {}
 
   template <typename Task, typename...Callables>
-  constexpr decltype(auto) chain(Task&& t, Callables&&... fn) {
-  }
+  constexpr decltype(auto) chain(Task&& t, Callables&&... fn) {}
 
   template <typename Fn, typename... Args>
   requires std::invocable<Fn,Args...>

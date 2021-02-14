@@ -4,7 +4,6 @@
 #include "include/task_type.hpp"
 #include "include/time_task.hpp"
 #include "include/task_queue.hpp"
-#include "include/priority_taskq.hpp"
 #include "include/task_factory.hpp"
 
 namespace {

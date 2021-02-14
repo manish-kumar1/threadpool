@@ -19,7 +19,7 @@ struct sync_container_sentinel {
 
 } // namespace details
 
-
+//
 // sync buffer container adapter
 // store elements of type T, allow concurrent read/write/access
 // 
@@ -157,6 +157,7 @@ public:
   }
 };
 
-} //namespace details
+} // namespace details
 } // namespace thp
+
 #endif // FUTURE_RANGES_HPP__

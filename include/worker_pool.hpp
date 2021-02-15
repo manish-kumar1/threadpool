@@ -67,10 +67,6 @@ protected:
     return p.first->first;
   }
 
-  void callback(std::thread::id tid) {
-    //std::cerr << tid << "logged" << std::endl;
-  }
-
 private:
   mutable std::mutex mu_;
   platform::thread_config config_;

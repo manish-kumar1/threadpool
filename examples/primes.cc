@@ -47,7 +47,7 @@ auto find_prime(unsigned s, unsigned e) {
 auto check_prime(thp::threadpool* tp) {
   const unsigned int times = 10000000; // 10 million
   std::vector<std::future<std::vector<unsigned>>> ret;
-  auto step = 125*100;
+  auto step = times/16;
   for (unsigned int i = 0; i < times; i += step) {
       auto [fut] = tp->enqueue(find_prime, i, std::min(i+step, times));
       ret.emplace_back(std::move(fut));

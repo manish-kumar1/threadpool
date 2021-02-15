@@ -21,6 +21,7 @@
 #include "include/task_factory.hpp"
 
 namespace thp {
+
 class threadpool {
 public:
   explicit threadpool(unsigned max_threads = std::thread::hardware_concurrency());
@@ -82,33 +83,26 @@ public:
       return std::transform_reduce(s1, e1, init, rdc_fn, tr_fn);
     };
 
-    auto reduce_task = [&]() {
-      std::vector<simple_task<T>> tasks;
-      tasks.reserve(part.count());
+    std::vector<std::shared_ptr<simple_task<T>>> tasks;
+    tasks.reserve(part.count());
 
-#if 0
-      for_each(part.begin(), part.end(), [](auto p) {
-        tasks.emplace_back(make_task(transform_reduce_fn, p.first, p.second));
-      });
-#endif
-      for (auto it = part.begin(); !part(); it = part.current()) {
-        tasks.emplace_back(make_task(transform_reduce_fn, it, part.next()));
-      }
+    for (auto it = part.begin(); !part(); it = part.current()) {
+      tasks.emplace_back(make_task(transform_reduce_fn, it, part.next()));
+    }
 
-      auto [futs] = schedule(std::move(tasks));
+    auto [f] = schedule(std::move(tasks));
 
+    auto reduce_task = [&] (auto&& futs) mutable {
       return std::transform_reduce(futs.begin(), futs.end(), init, rdc_fn,
-                                   [](auto&& f) { return std::move(f.get());});
+                                   [](auto&& fut) mutable { return std::move(fut.get()); });
     };
 
-    return schedule(make_task(reduce_task));
+    return schedule(make_task(reduce_task, std::move(f)));
   }
 
   template<typename InputIter, typename Fn>
   decltype(auto) for_each(InputIter s, InputIter e, Fn fn) {
-    for(auto it = s; it != e; ++it) {
-      enqueue(fn, *it);
-    }
+    std::for_each(s, e, [&](auto&& x) { enqueue(fn, x); });
     return e;
   }
 

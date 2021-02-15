@@ -1,6 +1,8 @@
 #ifndef FUTURE_RANGES_HPP__
 #define FUTURE_RANGES_HPP__
 
+#include <iostream>
+
 #include <future>
 #include <ranges>
 #include <iterator>
@@ -136,7 +138,7 @@ template <typename SyncContainer, typename InnerIterator>
 class sync_container_iterator {
 private:
   SyncContainer* container;
-  size_t idx;
+  std::size_t idx;
 
 public:
   explicit sync_container_iterator(SyncContainer* c, InnerIterator it)

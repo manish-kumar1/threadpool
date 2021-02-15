@@ -23,6 +23,9 @@ concept PriorityTask = SimpleTask<T> &&
     requires std::totally_ordered<typename T::PriorityType>;
   };
 
+template<typename T>
+concept ThreadPoolTask = PriorityTask<T>  || SimpleTask<T>;
+
 } // namespace kncpt
 } // namespace thp
 

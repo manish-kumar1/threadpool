@@ -15,7 +15,8 @@
 decltype(auto) reduce_min(const std::vector<int>& data, thp::threadpool& tp) {
   using pf = thp::part_algo<decltype(data.begin())>;
   pf algo(data.begin(), data.end());
-  algo.step = 250000; // tune it for your data size
+  algo.step = data.size()/16; //250000; // tune it for your data size
+  if (algo.step == 0) algo.step = 1;
 
   auto [f] = tp.reduce(data.begin(), data.end(),
                        std::numeric_limits<int>::max(),  // T
@@ -34,7 +35,7 @@ int main(int argc, const char* const argv[])
   try {
     std::random_device r;
     std::default_random_engine engine(r());
-    std::uniform_int_distribution<int> dis(-100, std::numeric_limits<int>::max());
+    std::uniform_int_distribution<int> dis(-42, std::numeric_limits<int>::max());
     constexpr const unsigned n = 40*1000000; // 40 million
     std::vector<int> data;
     data.reserve(n);
@@ -54,7 +55,7 @@ int main(int argc, const char* const argv[])
     }
     else
     {
-      thp::threadpool tp(16);
+      thp::threadpool tp;
       cu.now();
       auto tmin = reduce_min(data, std::ref(tp));    
       cu.now();

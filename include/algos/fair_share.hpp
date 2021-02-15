@@ -27,7 +27,7 @@ public:
 
     if (output.size() < expected_items) {
       std::ranges::for_each(inputs, [&](auto&& q) {
-                   std::unique_ptr<executable> t;
+                   std::shared_ptr<executable> t;
                    if (q->pop(t))
                      output.emplace_back(std::move(t));
                });

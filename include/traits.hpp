@@ -13,6 +13,7 @@
 #include <tuple>
 
 #include "include/task_type.hpp"
+#include "include/time_task.hpp"
 
 namespace thp {
 namespace traits {
@@ -93,8 +94,21 @@ struct FindTaskType_Impl<priority_task<T,P>> {
   typedef priority_task<T,P> type;
 };
 
+template<typename T, typename P>
+struct FindTaskType_Impl<time_task<T,P>> {
+  typedef time_task<T,P> type;
+};
+
+template<std::size_t N, typename T, typename P>
+struct FindTaskType_Impl< time_series_task<N, T, P> > {
+  typedef time_series_task<N,T,P> type;
+};
+
 template<typename T>
 struct FindTaskType_Impl<std::unique_ptr<T>> : FindTaskType_Impl<T> {};
+
+template<typename T>
+struct FindTaskType_Impl<std::shared_ptr<T>> : FindTaskType_Impl<T> {};
 
 template<typename T>
 struct FindTaskType_Impl<std::vector<T>> : FindTaskType_Impl<T> {};

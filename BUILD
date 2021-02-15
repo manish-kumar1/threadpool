@@ -1,4 +1,5 @@
 load(":compilation.bzl", "copt_flags", "link_flags")
+load("//bazel:file-count.bzl", 'file_count_rule')
 
 cc_library(
   name = "lib_thp",
@@ -16,4 +17,10 @@ cc_binary(
   copts = copt_flags,
   deps = [":lib_thp", "@glog//:glog", "@yaml-cpp//:yaml-cpp",],
   visibility = ["//visibility:public"],
+)
+
+file_count_rule(
+  name = 'file_count',
+  deps = ['threadpool'],
+  extension = 'h',
 )

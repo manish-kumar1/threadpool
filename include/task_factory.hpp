@@ -14,17 +14,14 @@ namespace thp {
 template<typename Fn, typename... Args>
 [[nodiscard]] constexpr inline decltype(auto) make_task(Fn&& fn, Args&& ...args) {
   using Ret = std::invoke_result_t<Fn,Args...>;
-  static_assert(compile_time::find<priority_task<Ret, void>, AllPriorityTaskTupleType>() < std::tuple_size_v<AllPriorityTaskTupleType>);
-  //static_assert(compile_time::exists_in<priority_task<Ret, void>, AllPriorityTaskTupleType>(), "task type is not registered");
-  return priority_task<Ret, void>(std::forward<Fn>(fn), std::forward<Args>(args)...);
+  return std::make_shared<priority_task<Ret, void>>(std::forward<Fn>(fn), std::forward<Args>(args)...);
 }
 
 template<typename Prio, typename Fn, typename... Args>
 [[nodiscard]] constexpr inline decltype(auto) make_task(Fn&& fn, Args&& ...args) {
   using Ret = std::invoke_result_t<Fn,Args...>;
-  static_assert(compile_time::find<priority_task<Ret, Prio>, AllPriorityTaskTupleType>() < std::tuple_size_v<AllPriorityTaskTupleType>);
-  //static_assert(compile_time::exists_in<priority_task<Ret, Prio>, AllPriorityTaskTupleType>(), "task type is not registered");
-  return priority_task<Ret, Prio>(std::forward<Fn>(fn), std::forward<Args>(args)...);
+  static_assert(compile_time::find<Prio, AllPriorityTupleType>() < std::tuple_size_v<AllPriorityTupleType>);
+  return std::make_shared<priority_task<Ret, Prio>>(std::forward<Fn>(fn), std::forward<Args>(args)...);
 }
 
 }

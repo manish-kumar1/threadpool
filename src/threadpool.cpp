@@ -26,9 +26,7 @@ threadpool::threadpool(unsigned max_threads)
   auto worker_conf = platform::thread_config();
 
   worker_pool_.update_config(worker_conf);
-  //std::cerr << "thp: " << stop_src_.get() << ", " << stop_src_.use_count() << std::endl;
-  for (unsigned i = 0; i < max_threads_; ++i)
-    worker_pool_.start_thread(&job_queue::worker_fn, &jobq_);
+  worker_pool_.start_n_thread(max_threads_, &job_queue::worker_fn, &jobq_);
 
   managers_.start_thread(&job_queue::schedule_fn, &jobq_);
   //book_keepers_.start_thread(&threadpool::print, this, std::ref(std::cerr));

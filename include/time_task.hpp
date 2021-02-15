@@ -10,10 +10,10 @@
 #include <ranges>
 #include <algorithm>
 #include <initializer_list>
+#include <concepts>
 //#include <syncstream>
 
 #include "include/task_type.hpp"
-#include "include/traits.hpp"
 #include "include/sync_container.hpp"
 
 namespace thp {
@@ -35,7 +35,7 @@ public:
     Base::set_priority(Clock::now());
   }
 
-  constexpr decltype(auto) at(TimePoint&& tp) {
+  constexpr decltype(auto) start_at(TimePoint&& tp) {
     Base::set_priority(std::forward<TimePoint>(tp));
     return *this;
   }
@@ -53,7 +53,7 @@ public:
 };
 
 template <std::size_t N, typename Ret, typename Clock = std::chrono::system_clock>
-class time_series_task : public virtual executable {
+class time_series_task : public time_task<Ret, Clock> {
   using ResultBuffer = sync_container<std::future<Ret>>;
 
 public:
@@ -65,7 +65,7 @@ public:
   requires std::regular_invocable<Fn,Args...>
            && std::same_as<Ret, std::invoke_result_t<Fn,Args...>>
   explicit time_series_task(Fn &&fn, Args &&... args)
-      : pt{std::bind(std::forward<Fn>(fn), std::forward<Args>(args)...)}
+      : time_task<Ret, Clock>{std::forward<Fn>(fn), std::forward<Args>(args)...}
       , time_points{}
       , results{new ResultBuffer(N)}
       , ret{}
@@ -76,8 +76,9 @@ public:
   time_series_task(time_series_task&&) = default;
   time_series_task& operator = (time_series_task&&) = default;
 
-  decltype(auto) at(std::initializer_list<TimePoint> at) {
-    time_points = std::vector<TimePoint>{at};
+  template<typename... Dur>
+  decltype(auto) after(Dur&&... dur) {
+    time_points = std::vector<TimePoint>{(this->priority + dur)...};
     std::ranges::sort(time_points);
     results->reserve(std::ranges::size(time_points));
     return *this;
@@ -105,7 +106,6 @@ public:
   virtual ~time_series_task() = default;
 
 protected:
-  std::packaged_task<Ret()> pt;
   std::vector<TimePoint> time_points;
   std::shared_ptr<ResultBuffer> results;
   std::promise<std::shared_ptr<ResultBuffer>> ret;

@@ -48,19 +48,18 @@ TEST(PriorityTaskTest, qorder) {
   auto t1 = thp::make_task<int>(factorial, 1);
   auto t2 = thp::make_task<int>(factorial, 2);
   auto t3 = thp::make_task<int>(factorial, 3);
-  auto f1 = t1.future(); 
-  auto f2 = t2.future(); 
-  auto f3 = t3.future(); 
-  t1.set_priority(1);
-  t2.set_priority(2);
-  t3.set_priority(3);
+  auto f1 = t1->future(); 
+  auto f2 = t2->future(); 
+  auto f3 = t3->future(); 
+  t1->set_priority(1);
+  t2->set_priority(2);
+  t3->set_priority(3);
 
   thp::priority_taskq<decltype(t1)> q;
   q.put(std::move(t3));
   q.put(std::move(t1));
   q.put(std::move(t2));
-  // TODO 
-  std::unique_ptr<thp::executable> t;
+  std::shared_ptr<thp::executable> t;
   q.pop(t);
   t->execute();
   EXPECT_TRUE(f1.valid());

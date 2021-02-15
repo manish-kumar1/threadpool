@@ -40,11 +40,10 @@ struct TaskQueueTuple<std::tuple<Ts...>> {
   using type = std::tuple<priority_taskq<Ts>...>;
 };
 
-
 // job queue manages several task queues
 class job_queue : public std::enable_shared_from_this<job_queue> {
-  using TaskQueueTupleType = TaskQueueTuple<AllPriorityTaskTupleType>::type;
-  inline consteval decltype(auto) static TaskQueueTupleSize() { return std::tuple_size_v<TaskQueueTupleType>; }
+  using TaskQueueTupleType = TaskQueueTuple<AllPriorityTupleType>::type;
+  static inline consteval decltype(auto) TaskQueueTupleSize() { return std::tuple_size_v<TaskQueueTupleType>; }
 
 public:
   explicit job_queue()
@@ -52,45 +51,30 @@ public:
   , wmtx{}
   , num_tasks{0}
   , scheduler{}
-  , task_qs{create_taskqs_tuple<AllPriorityTaskTupleType>(std::make_index_sequence<TaskQueueTupleSize()>{})}
+  , task_qs{create_taskqs_tuple<AllPriorityTupleType>(std::make_index_sequence<TaskQueueTupleSize()>{})}
   , all_qs{}
   , tasks{}
   {
-	  create_taskqs_array(task_qs, std::make_index_sequence<std::tuple_size_v<AllPriorityTaskTupleType>>{});
+    create_taskqs_array(task_qs, std::make_index_sequence<std::tuple_size_v<AllPriorityTupleType>>{});
   }
 
   template <typename C>
   constexpr decltype(auto) insert_task(C&& t) {
     using TaskType = traits::FindTaskType<C>::type;
+
     auto futs = collect_future(std::forward<C>(t));
     num_tasks += taskq_for<TaskType>().put(std::forward<C>(t));
     return futs;
   }
 
-#if 0
-  template<typename Rep, typename Period>
-  bool normal_shutdown(const std::chrono::duration<Rep, Period>& rel_time) {
-    std::shared_lock l(mu);
-    return cond_stop.wait_for(l, rel_time, [this] {
-             return (registered_workers == 0) && !pending_tasks();
-           });
-  }
-#endif
-
-  //void copy_stats(jobq_stats& stats);
-
-  //void compute_stats_fn();
-  //void schedule_fn(task_scheduler*, std::stop_token st);
-  //void worker_fn(std::stop_token st);
-
-  //void request_reschedule();
-  //bool update_table();
-
   void close() {}
   void stop() {}
-  void drain();
 
-  bool is_stopped() const;
+  void drain() {
+    cond_full.notify_all();
+    std::unique_lock l(wmtx);
+    cond_empty.wait(l, [this] { return empty() && tasks.empty(); });
+  }
 
   void notify_reschedule()      { sched_cond.notify_one(); }
 
@@ -112,7 +96,7 @@ public:
       if (ne)
       {
         std::scoped_lock lk(mu, wmtx);
-        scheduler.compute_stats(stats);
+      //  compute_stats(stats);
         scheduler.apply(stats);
       }
       else
@@ -125,7 +109,7 @@ public:
   void worker_fn(managed_stop_token st) {
     //std::cerr << "worker_fn: " << st << std::endl;
     for(;;) {
-      std::unique_ptr<executable> t{nullptr};
+      std::shared_ptr<executable> t{nullptr};
       {
         std::unique_lock l(wmtx);
         cond_full.wait(l, st, [&] {
@@ -189,12 +173,12 @@ protected:
 
   template <typename TaskType>
   constexpr inline auto& taskq_for(void) {
-	// 	return std::get<traits::TaskQType<TaskType>>(task_qs);
-    return std::get<priority_taskq<TaskType>>(task_qs);
+	  using T = priority_taskq<typename TaskType::PriorityType>;
+    return std::get<T>(task_qs);
   }
 
 //  void compute_algo_stats(statistics& stats) {
-//    stats.num_tasks = num_tasks;
+//    stats.num_tasks = num_tasks.load();
 //  }
 //
 //  void compute_stats(jobq_stats& stats) {
@@ -212,7 +196,7 @@ private:
   // task queues for different task types
   TaskQueueTupleType task_qs;
   std::vector<task_queue*> all_qs;
-  std::deque<std::unique_ptr<executable>> tasks;
+  std::deque<std::shared_ptr<executable>> tasks;
   std::condition_variable_any cond_empty, cond_full, cond_stop, sched_cond;
   int registered_workers;
   bool closed, stopped;

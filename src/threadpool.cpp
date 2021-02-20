@@ -20,15 +20,15 @@ threadpool::threadpool(unsigned max_threads)
   , worker_pool_{}
   , managers_{}
   , book_keepers_{}
-  , max_threads_{std::max(2u, max_threads)}
+  , max_threads_{max_threads}
 {
   std::lock_guard<std::mutex> lck(mu_);
   auto worker_conf = platform::thread_config();
 
   worker_pool_.update_config(worker_conf);
-  worker_pool_.start_n_thread(max_threads_, &job_queue::worker_fn, &jobq_);
+  worker_pool_.start_n_thread(max_threads_, &job_queue<TaskQueueTupleType>::worker_fn, &jobq_);
 
-  managers_.start_thread(&job_queue::schedule_fn, &jobq_);
+  managers_.start_thread(&job_queue<TaskQueueTupleType>::schedule_fn, &jobq_);
   //book_keepers_.start_thread(&threadpool::print, this, std::ref(std::cerr));
 }
 
@@ -68,8 +68,8 @@ void threadpool::print(std::ostream& oss, managed_stop_token st) {
           << " " << worker_utilization[i] << '\n';
 
     oss << std::endl;
-#endif
     oss << "job_queue stats: " << std::endl;
+#endif
   }
 }
 

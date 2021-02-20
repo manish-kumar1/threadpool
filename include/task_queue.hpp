@@ -50,14 +50,13 @@ class priority_taskq : public task_queue {
   using value_type = std::shared_ptr<comparable_task<Prio>>;
 
   struct value_compare {
-	  decltype(auto) operator () (auto&& x, auto&& y) const
+	  constexpr decltype(auto) operator () (auto&& x, auto&& y) const
 	  {
 		  return TaskComp()(*x, *y);
 	  };
   };
 
 public:
-
   explicit priority_taskq()
   : mu{}
   , tasks{}
@@ -86,11 +85,13 @@ public:
 
     if constexpr (std::is_same_v<void, Prio>) {
     	t = std::move(tasks.front());
+      //std::cerr << "pop " << t << ", " << t.get() << std::endl;
     	tasks.pop_front();
     }
     else {
 		  std::ranges::pop_heap(tasks, value_compare());
 		  t = std::move(tasks.back());
+      //std::cerr << "pop " << t << ", " << t.get() << std::endl;
 		  tasks.pop_back();
     }
 	  return 1;
@@ -98,7 +99,7 @@ public:
 
   std::size_t pop_n(std::deque<std::shared_ptr<executable>>& out, std::size_t n = 1u) {
     std::unique_lock l(mu);
-    if (tasks.empty()) return false;
+    if (tasks.empty()) return 0;
 
     n = std::min(n, tasks.size());
 
@@ -130,7 +131,6 @@ public:
   virtual ~priority_taskq() = default;
 
 protected:
-
   std::size_t insert(std::shared_ptr<comparable_task<Prio>>&& p) {
     tasks.emplace_back(std::move(p));
     std::ranges::push_heap(tasks, value_compare());
@@ -144,7 +144,6 @@ protected:
     std::ranges::push_heap(tasks, value_compare());
     return n;
   }
-
 
   mutable std::shared_mutex mu; // all mutex type are neither copyable nor movable
   std::deque<value_type> tasks;

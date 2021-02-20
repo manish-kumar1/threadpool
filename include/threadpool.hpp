@@ -19,10 +19,12 @@
 #include "include/task_type.hpp"
 #include "include/worker_pool.hpp"
 #include "include/task_factory.hpp"
+#include "include/all_priority_types.hpp"
 
 namespace thp {
 
 class threadpool {
+  using TaskQueueTupleType = TaskQueueTuple<AllPriorityTupleType>::type;
 public:
   explicit threadpool(unsigned max_threads = std::thread::hardware_concurrency());
 
@@ -39,7 +41,7 @@ public:
   // could be heterogeneous task types
   template <typename... Args>
   constexpr decltype(auto) schedule(Args&&... args) {
-    auto futs = std::make_tuple(jobq_.insert_task(args)...);
+    auto futs = std::make_tuple(jobq_.schedule_task(args)...);
     jobq_.notify_reschedule();
     return futs;
   }
@@ -90,14 +92,18 @@ public:
       tasks.emplace_back(make_task(transform_reduce_fn, it, part.next()));
     }
 
-    auto [f] = schedule(std::move(tasks));
+    auto f = jobq_.collect_future(tasks);
 
     auto reduce_task = [&] (auto&& futs) mutable {
       return std::transform_reduce(futs.begin(), futs.end(), init, rdc_fn,
                                    [](auto&& fut) mutable { return std::move(fut.get()); });
     };
 
-    return schedule(make_task(reduce_task, std::move(f)));
+    auto t = make_task(reduce_task, std::move(f));
+    auto ret = jobq_.collect_future(t);
+    tasks.emplace_back(std::move(t));
+    jobq_.insert_task(std::move(tasks));
+    return std::make_tuple(std::move(ret));
   }
 
   template<typename InputIter, typename Fn>
@@ -120,7 +126,7 @@ private:
   std::shared_ptr<managed_stop_source> stop_src_, etc_stop_src_;
   //std::stop_callback<std::function<void()>> stop_cb_;
   task_scheduler scheduler_;
-  job_queue jobq_;
+  job_queue<TaskQueueTupleType> jobq_;
   worker_pool worker_pool_, managers_, book_keepers_;
   //std::unique_ptr<signal_handler> sighandler_;
   unsigned max_threads_;

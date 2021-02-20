@@ -5,7 +5,7 @@ namespace thp {
 
 // task interface
 struct executable {
-  virtual void execute() = 0;
+  virtual void execute() { throw std::logic_error("shouldn't be called"); };
   virtual std::ostream& info(std::ostream& oss) {
     oss << typeid(*this).name();
     return oss;

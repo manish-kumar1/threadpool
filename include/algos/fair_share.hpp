@@ -21,18 +21,24 @@ public:
 
   void apply(statistics& stats) override {
     const auto& inputs = stats.jobq.in.qs;
-    auto& output = stats.jobq.out.output;
+    auto& output = stats.jobq.out.cur_output; // TODO(find out why auto& works and auto doesn't)
     auto n = output.size();
     auto expected_items = stats.jobq.in.load_factor * stats.pool.num_workers;
 
-    if (output.size() < expected_items) {
+    if (stats.jobq.in.load_factor < 0) {
+      // put all tasks in queue
+      std::ranges::for_each(inputs, [&](auto&& q) {
+        q->pop_n(output, q->len());
+      });
+    }
+    else if (output.size() < expected_items) {
       std::ranges::for_each(inputs, [&](auto&& q) {
                    std::shared_ptr<executable> t;
                    if (q->pop(t))
                      output.emplace_back(std::move(t));
                });
-      stats.jobq.out.new_tasks = output.size() - n;
     }
+    stats.jobq.out.new_tasks = output.size() - n;
   }
       
   int apply(statistics& stats, std::thread::id tid) override {

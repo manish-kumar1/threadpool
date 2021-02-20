@@ -15,8 +15,9 @@ namespace details {
 template <typename Container, typename Inner_iterator>
 class sync_container_iterator;
 
+template<typename Iter>
 struct sync_container_sentinel {
-  const size_t idx;
+  const std::iterator_traits<Iter>::difference_type idx;
 };
 
 } // namespace details
@@ -95,7 +96,7 @@ public:
 
   constexpr iterator begin()              { return iterator(this, data.begin()); }
   constexpr const_iterator cbegin() const { return const_iterator(this, data.cbegin()); }
-  constexpr auto end()                    { return details::sync_container_sentinel(buf_len); }
+  constexpr auto end()                    { return details::sync_container_sentinel<inner_iterator>(buf_len); }
   constexpr auto cend() const             { return end(); }
 
   T& operator[](size_t idx) {
@@ -138,7 +139,7 @@ template <typename SyncContainer, typename InnerIterator>
 class sync_container_iterator {
 private:
   SyncContainer* container;
-  std::size_t idx;
+  typename std::iterator_traits<InnerIterator>::difference_type idx;
 
 public:
   explicit sync_container_iterator(SyncContainer* c, InnerIterator it)
@@ -154,7 +155,7 @@ public:
     return (a.container == b.container) && (a.idx == b.idx);
   }
 
-  friend bool operator == (sync_container_iterator a, sync_container_sentinel b) {
+  friend bool operator == (sync_container_iterator a, sync_container_sentinel<InnerIterator> b) {
     return a.idx >= b.idx;
   }
 };

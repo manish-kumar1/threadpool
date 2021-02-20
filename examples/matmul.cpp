@@ -66,9 +66,9 @@ decltype(auto) matmul_tp(const Matrix& mat1,
     }
   };
 
-  auto mul = [&](const size_t rs, const size_t re, const size_t cs, const size_t ce) -> void {
+  auto mul = [&](const size_t i, const size_t cs, const size_t ce) -> void {
       // std::cerr << rs << ":" << re << ":" << cs << ":" << ce << ", n= " << n << std::endl;
-              for(auto i = rs; i < re; ++i)
+              //for(auto i = rs; i < re; ++i)
                 for(auto j = cs; j < ce; ++j) {
                   ans[i][j] = 0u;
                   for(auto k = 0u; k < n; ++k)
@@ -81,8 +81,10 @@ decltype(auto) matmul_tp(const Matrix& mat1,
     for(auto j = 0u; j < n; j += step) {
       tp.schedule(thp::make_task(mul, i, std::min(n, i+step), j, std::min(n, j+step)));
     }
+  for(auto i = 0; i < n; ++i)
+    tp.enqueue(mul, i, 0, n);
 #endif
-  //mul2(0, n, 128);
+  //mul2(0, n, 256);
   mul3(0, n, 1024u);
   tp.drain();
 }

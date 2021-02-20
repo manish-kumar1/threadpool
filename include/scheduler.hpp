@@ -9,8 +9,6 @@
 #include "include/managed_stop_token.hpp"
 
 namespace thp {
-// fwd declare
-class job_queue;
 
 class task_scheduler {
 public:

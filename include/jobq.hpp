@@ -32,18 +32,11 @@ struct jobq_closed_ex final : std::exception {
   const char *what() const noexcept override { return "jobq_closed_ex"; }
 };
 
-template<typename T>
-struct TaskQueueTuple;
-
-template<typename...Ts>
-struct TaskQueueTuple<std::tuple<Ts...>> {
-  using type = std::tuple<priority_taskq<Ts>...>;
-};
-
 // job queue manages several task queues
-class job_queue : public std::enable_shared_from_this<job_queue> {
-  using TaskQueueTupleType = TaskQueueTuple<AllPriorityTupleType>::type;
-  static inline consteval decltype(auto) TaskQueueTupleSize() { return std::tuple_size_v<TaskQueueTupleType>; }
+template <typename TaskQueueTupleType>
+class job_queue {
+  //using TaskQueueTupleType = TaskQueueTuple<Tup>::type;
+  static const auto NumQs = std::tuple_size_v<TaskQueueTupleType>;
 
 public:
   explicit job_queue()
@@ -51,20 +44,26 @@ public:
   , wmtx{}
   , num_tasks{0}
   , scheduler{}
-  , task_qs{create_taskqs_tuple<AllPriorityTupleType>(std::make_index_sequence<TaskQueueTupleSize()>{})}
+  , task_qs{create_taskqs_tuple(std::make_index_sequence<NumQs>{})}
   , all_qs{}
   , tasks{}
   {
-    create_taskqs_array(task_qs, std::make_index_sequence<std::tuple_size_v<AllPriorityTupleType>>{});
+    create_taskqs_array(task_qs, std::make_index_sequence<NumQs>{});
   }
 
   template <typename C>
-  constexpr decltype(auto) insert_task(C&& t) {
+  constexpr decltype(auto) schedule_task(C&& t) {
     using TaskType = traits::FindTaskType<C>::type;
 
     auto futs = collect_future(std::forward<C>(t));
     num_tasks += taskq_for<TaskType>().put(std::forward<C>(t));
     return futs;
+  }
+
+  template <typename C>
+  constexpr decltype(auto) insert_task(C&& t) {
+    using TaskType = traits::FindTaskType<C>::type;
+    num_tasks += taskq_for<TaskType>().put(std::forward<C>(t));
   }
 
   void close() {}
@@ -79,10 +78,11 @@ public:
   void notify_reschedule()      { sched_cond.notify_one(); }
 
   void schedule_fn(managed_stop_token st) {
-    statistics stats{ {std::chrono::system_clock::now(), {all_qs, num_tasks.load(), 2}, {tasks, 0}}, {16, 16} };
+    statistics stats{std::chrono::system_clock::now(), {{all_qs, num_tasks.load(), 2}, {tasks, 0}}, {16, 16} };
 
     for(;;) {
       thread_local bool ne = false;
+      stats.jobq.out.reset();
       {
         std::shared_lock l(mu);
         ne = sched_cond.wait_for(l, st, Static::scheduler_tick(), [&] { return !empty(); });
@@ -96,12 +96,14 @@ public:
       if (ne)
       {
         std::scoped_lock lk(mu, wmtx);
-      //  compute_stats(stats);
+        //  compute_stats(stats);
         scheduler.apply(stats);
+        //std::cerr << std::this_thread::get_id() << " schedule_fn ne: " << num_tasks.load() << ", " << ne << std::endl;
+        //num_tasks -= stats.jobq.out.new_tasks;
       }
       else
         cond_empty.notify_one();
-      //if (stats.jobq.out.new_tasks) std::cerr << std::this_thread::get_id() << " notify cond_full: " << num_tasks.load() << std::endl;
+      //if (stats.jobq.out.new_tasks) std::cerr << std::this_thread::get_id() << " notify cond_full: " << num_tasks.load() << ", " << stats.jobq.out.new_tasks << std::endl;
       util::notify_cv(cond_full, stats.jobq.out.new_tasks);
     }
   }
@@ -124,9 +126,9 @@ public:
         t = std::move(tasks.front());
         tasks.pop_front();
         --num_tasks;
+      //  std::cerr << std::this_thread::get_id() << "worker_fn: " << num_tasks.load() << ", " << t << std::endl;
       }
       t->execute();
-      //std::cerr << std::this_thread::get_id() << " got task " << num_tasks.load() << std::endl;
     }
     //std::cerr << std::this_thread::get_id() << " done" << std::endl;
   }
@@ -139,13 +141,13 @@ protected:
   template<typename Tuple, std::size_t... I>
   constexpr void create_taskqs_array(Tuple&& tup, std::index_sequence<I...>)
   {
-    all_qs.reserve(TaskQueueTupleSize());
+    all_qs.reserve(NumQs);
     ((all_qs.emplace_back(std::addressof(std::get<I>(std::forward<Tuple>(tup))))), ...);
   }
 
-  template<typename Tuple, std::size_t...I>
+  template<std::size_t...I>
   constexpr TaskQueueTupleType create_taskqs_tuple(std::index_sequence<I...>) {
-    return std::make_tuple(priority_taskq<std::tuple_element_t<I, Tuple>>()...);
+    return std::make_tuple(std::tuple_element_t<I, TaskQueueTupleType>()...);
   }
 
   template <typename C>

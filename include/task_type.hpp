@@ -18,19 +18,23 @@ template<typename T>
 struct regular_task;
 
 template <typename Ret, typename... Args>
-struct regular_task<Ret(Args...)> : public executable {
+struct regular_task<Ret(Args...)> : public virtual executable, public std::packaged_task<Ret(Args...)> {
 
   template <typename Fn>
   constexpr regular_task(Fn&& fn)
-    : pt{std::forward<Fn>(fn)}
+    : std::packaged_task<Ret(Args...)>{std::forward<Fn>(fn)}
   {}
 
   regular_task(regular_task&&) = default;
   regular_task& operator = (regular_task&&) = default;
 
-private:
-  std::packaged_task<Ret(Args...)> pt;
+  void execute() override {
+    this->operator()();
+  }
 
+  std::future<Ret> future() { return this->get_future(); }
+
+  virtual ~regular_task() = default;
 };
 
 template<typename Prio = void>
@@ -39,6 +43,9 @@ struct comparable_task : virtual public executable {
   using PriorityType = Prio;
 
   constexpr comparable_task() = default;
+
+  comparable_task(comparable_task&&) = default;
+  comparable_task& operator = (comparable_task&&) = default;
 
   constexpr comparable_task(Prio&& p)
   : priority{std::forward<Prio>(p)}
@@ -56,6 +63,7 @@ struct comparable_task : virtual public executable {
     return this->priority <=> rhs.priority;
   }
 
+  virtual ~comparable_task() = default;
 protected:
   Prio priority;
 };
@@ -71,8 +79,8 @@ struct comparable_task<void> : virtual public executable {
   }
 };
 
-template <typename Ret, typename Prio = void>
-class priority_task : public virtual comparable_task<Prio> {
+template <typename Ret, typename Prio>
+class priority_task : virtual public comparable_task<Prio>, virtual public executable {
 public:
   using ReturnType = Ret;
   using PriorityType = Prio;

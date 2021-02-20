@@ -19,23 +19,28 @@ struct workerpool_stats {
 };
 
 struct outputs {
-  std::deque<std::shared_ptr<executable>>& output;
+  std::deque<std::shared_ptr<executable>>& cur_output;
   std::size_t new_tasks;
+
+  outputs& reset() {
+    new_tasks = 0;
+    return *this;
+  }
 };
 
 struct inputs {
-  const std::vector<task_queue*>& qs;
-  const int num_tasks;
-  const int load_factor;
+  std::vector<task_queue*>& qs;
+  int num_tasks;
+  int load_factor;
 };
 
 struct jobq_stats {
-  std::chrono::system_clock::time_point ts;
   const inputs in;
   outputs out;
 };
 
 struct statistics {
+  std::chrono::system_clock::time_point ts;
   struct jobq_stats jobq;
   struct workerpool_stats pool;
 };

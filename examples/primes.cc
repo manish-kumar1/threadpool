@@ -70,10 +70,6 @@ int main(int argc, const char* const argv[]) {
     std::ranges::for_each(primes, [](auto&& f) {
          std::ranges::copy(f.get(), std::ostream_iterator<unsigned>(std::cerr, "\n"));
     });
-    tp.pause();
-    std::this_thread::sleep_for(3s);
-    tp.resume();
-
     std::cerr << "thp: " << cp.get_ms() << " ms" << std::endl;
   } catch (exception &ex) {
     cerr << "main: Exception: " << ex.what() << endl;

@@ -47,6 +47,8 @@ public:
   , task_qs{create_taskqs_tuple(std::make_index_sequence<NumQs>{})}
   , all_qs{}
   , tasks{}
+  , cur_output{&tasks[0]}
+  , old_output{&tasks[1]}
   {
     create_taskqs_array(task_qs, std::make_index_sequence<NumQs>{});
   }
@@ -72,17 +74,18 @@ public:
   void drain() {
     cond_full.notify_all();
     std::unique_lock l(wmtx);
-    cond_empty.wait(l, [this] { return empty() && tasks.empty(); });
+    cond_empty.wait(l, [this] { return empty(); });
   }
 
   void notify_reschedule()      { sched_cond.notify_one(); }
 
   void schedule_fn(managed_stop_token st) {
-    statistics stats{std::chrono::system_clock::now(), {{all_qs, num_tasks.load(), 2}, {tasks, 0}}, {16, 16} };
+    statistics stats{std::chrono::system_clock::now(), {{all_qs, num_tasks.load(), 2}, {cur_output, 0}}, {16, 16} };
 
     for(;;) {
       thread_local bool ne = false;
       stats.jobq.out.reset();
+      stats.jobq.out.cur_output = old_output;
       {
         std::shared_lock l(mu);
         ne = sched_cond.wait_for(l, st, Static::scheduler_tick(), [&] { return !empty(); });
@@ -95,11 +98,16 @@ public:
       }
       if (ne)
       {
-        std::scoped_lock lk(mu, wmtx);
         //  compute_stats(stats);
         scheduler.apply(stats);
+        {
+          std::unique_lock l(wmtx);
+          if (cur_output->empty()) {
+            std::swap(cur_output, old_output);
+            stats.jobq.out.new_tasks = cur_output->size();
+          }
+        }
         //std::cerr << std::this_thread::get_id() << " schedule_fn ne: " << num_tasks.load() << ", " << ne << std::endl;
-        //num_tasks -= stats.jobq.out.new_tasks;
       }
       else
         cond_empty.notify_one();
@@ -115,7 +123,7 @@ public:
       {
         std::unique_lock l(wmtx);
         cond_full.wait(l, st, [&] {
-          return !tasks.empty();
+          return !cur_output->empty();
         });
         if (st.stop_requested()) break;
         if (st.pause_requested()) {
@@ -123,8 +131,8 @@ public:
           st.pause();
           l.lock();
         }
-        t = std::move(tasks.front());
-        tasks.pop_front();
+        t = std::move(cur_output->front());
+        cur_output->pop_front();
         --num_tasks;
       //  std::cerr << std::this_thread::get_id() << "worker_fn: " << num_tasks.load() << ", " << t << std::endl;
       }
@@ -134,21 +142,6 @@ public:
   }
 
   ~job_queue() = default;
-
-protected:
-  friend class scheduler;
-
-  template<typename Tuple, std::size_t... I>
-  constexpr void create_taskqs_array(Tuple&& tup, std::index_sequence<I...>)
-  {
-    all_qs.reserve(NumQs);
-    ((all_qs.emplace_back(std::addressof(std::get<I>(std::forward<Tuple>(tup))))), ...);
-  }
-
-  template<std::size_t...I>
-  constexpr TaskQueueTupleType create_taskqs_tuple(std::index_sequence<I...>) {
-    return std::make_tuple(std::tuple_element_t<I, TaskQueueTupleType>()...);
-  }
 
   template <typename C>
   constexpr decltype(auto) collect_future(C&& t)
@@ -173,6 +166,21 @@ protected:
     }
   }
 
+protected:
+
+  friend class scheduler;
+
+  template<typename Tuple, std::size_t... I>
+  constexpr void create_taskqs_array(Tuple&& tup, std::index_sequence<I...>)
+  {
+    all_qs.reserve(NumQs);
+    ((all_qs.emplace_back(std::addressof(std::get<I>(std::forward<Tuple>(tup))))), ...);
+  }
+
+  template<std::size_t...I>
+  constexpr TaskQueueTupleType create_taskqs_tuple(std::index_sequence<I...>) {
+    return std::make_tuple(std::tuple_element_t<I, TaskQueueTupleType>()...);
+  }
   template <typename TaskType>
   constexpr inline auto& taskq_for(void) {
 	  using T = priority_taskq<typename TaskType::PriorityType>;
@@ -198,7 +206,7 @@ private:
   // task queues for different task types
   TaskQueueTupleType task_qs;
   std::vector<task_queue*> all_qs;
-  std::deque<std::shared_ptr<executable>> tasks;
+  std::deque<std::shared_ptr<executable>> tasks[2], *cur_output, *old_output;
   std::condition_variable_any cond_empty, cond_full, cond_stop, sched_cond;
   int registered_workers;
   bool closed, stopped;

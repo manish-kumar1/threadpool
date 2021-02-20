@@ -97,7 +97,7 @@ int main(int argc, const char* const argv[])
   bool verify = false;
   try {
     // generate data
-    for(size_t n = 256; n <= N; n += 256) {
+    for(size_t n = 128; n <= N; n += 128) {
       std::random_device r;
       std::default_random_engine engine(r());
       std::uniform_int_distribution<Val> dis(-4200, +4200);

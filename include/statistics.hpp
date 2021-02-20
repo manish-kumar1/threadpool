@@ -19,7 +19,7 @@ struct workerpool_stats {
 };
 
 struct outputs {
-  std::deque<std::shared_ptr<executable>>& cur_output;
+  std::deque<std::shared_ptr<executable>>* cur_output;
   std::size_t new_tasks;
 
   outputs& reset() {

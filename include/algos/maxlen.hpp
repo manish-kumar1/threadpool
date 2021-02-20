@@ -15,7 +15,7 @@ struct maxlen_algo : schedule_algo {
 
   void apply(statistics& stats) {
     const auto& inputs = stats.jobq.in.qs;
-    auto& output = stats.jobq.out.cur_output;
+    auto& output = *stats.jobq.out.cur_output;
     auto expected_items = stats.jobq.in.load_factor * stats.pool.num_workers;
     if (output.size() < expected_items) {
       auto maxq = *std::ranges::max_element(inputs, {}, &task_queue::len);

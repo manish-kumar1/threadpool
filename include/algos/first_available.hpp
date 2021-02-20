@@ -13,7 +13,7 @@ namespace sched_algos {
 struct first_avail_algo : schedule_algo {
   void apply(statistics& stats) override {
     const auto& inputs = stats.jobq.in.qs;
-    auto& output = stats.jobq.out.cur_output;
+    auto& output = *stats.jobq.out.cur_output;
     auto expected_items = stats.jobq.in.load_factor * stats.pool.num_workers;
     if (output.size() < expected_items) {
       auto fq = std::ranges::find_if(inputs, [](auto&& x) { return x > 0; }, &task_queue::len);

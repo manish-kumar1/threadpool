@@ -21,7 +21,7 @@ public:
 
   void apply(statistics& stats) override {
     const auto& inputs = stats.jobq.in.qs;
-    auto& output = stats.jobq.out.cur_output; // TODO(find out why auto& works and auto doesn't)
+    auto& output = *stats.jobq.out.cur_output; // TODO(find out why auto& works and auto doesn't)
     auto n = output.size();
     auto expected_items = stats.jobq.in.load_factor * stats.pool.num_workers;
 

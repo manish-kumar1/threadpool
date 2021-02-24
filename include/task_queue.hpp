@@ -109,7 +109,7 @@ public:
       std::ranges::sort_heap(tasks, value_compare());
       std::move(tasks.begin(), std::next(tasks.begin(), n), std::back_inserter(out));
       tasks.erase(tasks.begin(), std::next(tasks.begin(), n));
-      std::ranges::push_heap(tasks, value_compare());
+      std::ranges::make_heap(tasks, value_compare());
     }
     return n;
   }

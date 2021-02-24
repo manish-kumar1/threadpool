@@ -92,18 +92,12 @@ public:
       tasks.emplace_back(make_task(transform_reduce_fn, it, part.next()));
     }
 
-    auto f = jobq_.collect_future(tasks);
+    auto f = jobq_.schedule_task(std::move(tasks));
 
-    auto reduce_task = [&] (auto&& futs) mutable {
+    return enqueue([&, futs = std::move(f)] () mutable {
       return std::transform_reduce(futs.begin(), futs.end(), init, rdc_fn,
                                    [](auto&& fut) mutable { return std::move(fut.get()); });
-    };
-
-    auto t = make_task(reduce_task, std::move(f));
-    auto ret = jobq_.collect_future(t);
-    tasks.emplace_back(std::move(t));
-    jobq_.insert_task(std::move(tasks));
-    return std::make_tuple(std::move(ret));
+    });
   }
 
   template<typename InputIter, typename Fn>
@@ -111,6 +105,8 @@ public:
     std::for_each(s, e, [&](auto&& x) { enqueue(fn, x); });
     return e;
   }
+
+  auto num_workers() const { return max_threads_; }
 
   ~threadpool();
 

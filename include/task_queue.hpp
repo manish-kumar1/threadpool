@@ -29,7 +29,8 @@ constexpr decltype(auto) to_value_type(C&& t)
   else if constexpr (traits::is_reference_wrapper<T>::value)     { return std::move(t.get()); }
   else if constexpr (std::is_base_of_v<executable, T>)           { return std::make_shared<T>(std::move(t)); }
   else if constexpr (traits::is_container<T>::value) {
-    using TaskType = traits::FindTaskType<std::remove_cvref_t<typename T::value_type>>::type;
+    using DataType = std::decay_t<typename T::value_type>;
+    using TaskType = traits::FindTaskType<DataType>::type;
     std::vector<std::shared_ptr<TaskType>> tasks;
     tasks.reserve(t.size());
     std::ranges::transform(t, std::back_inserter(tasks),
@@ -85,42 +86,40 @@ public:
 
     if constexpr (std::is_same_v<void, Prio>) {
     	t = std::move(tasks.front());
-      //std::cerr << "pop " << t << ", " << t.get() << std::endl;
     	tasks.pop_front();
     }
     else {
 		  std::ranges::pop_heap(tasks, value_compare());
 		  t = std::move(tasks.back());
-      //std::cerr << "pop " << t << ", " << t.get() << std::endl;
 		  tasks.pop_back();
     }
 	  return 1;
   }
 
-  std::size_t pop_n(std::deque<std::shared_ptr<executable>>& out, std::size_t n = 1u) {
+  std::size_t pop_n(std::deque<std::shared_ptr<executable>>& out, std::size_t n) {
     std::unique_lock l(mu);
     if (tasks.empty()) return 0;
 
     n = std::min(n, tasks.size());
 
-    for(auto x = n; x > 0; --x) {
-      if constexpr (std::is_same_v<void, Prio>) {
-    	  out.emplace_back(std::move(tasks.front()));
-    	  tasks.pop_front();
-      }
-      else {
-		    std::ranges::pop_heap(tasks, value_compare());
-		    out.emplace_back(std::move(tasks.back()));
-		    tasks.pop_back();
-      }
+    if constexpr (std::is_same_v<void, Prio>) {
+      std::move(tasks.begin(), std::next(tasks.begin(), n), std::back_inserter(out));
+      tasks.erase(tasks.begin(), std::next(tasks.begin(), n));
+    } else {
+      std::ranges::sort_heap(tasks, value_compare());
+      std::move(tasks.begin(), std::next(tasks.begin(), n), std::back_inserter(out));
+      tasks.erase(tasks.begin(), std::next(tasks.begin(), n));
+      std::ranges::push_heap(tasks, value_compare());
     }
     return n;
   }
 
-  template<typename C>
-  std::size_t put(C&& c) {
+  template<typename... C>
+  std::size_t put(C&&... c) {
     std::unique_lock l(mu);
-    return insert(to_value_type(std::forward<C>(c)));
+    std::size_t ret = 0;
+    ((ret += _insert(to_value_type(std::forward<C>(c)))), ...);
+    return ret;
   }
 
   std::size_t len() const override {
@@ -131,17 +130,22 @@ public:
   virtual ~priority_taskq() = default;
 
 protected:
-  std::size_t insert(std::shared_ptr<comparable_task<Prio>>&& p) {
+  std::size_t _insert(std::shared_ptr<comparable_task<Prio>>&& p) {
     tasks.emplace_back(std::move(p));
-    std::ranges::push_heap(tasks, value_compare());
+    if constexpr (!std::is_same_v<void, Prio>) {
+      std::ranges::push_heap(tasks, value_compare());
+    }
     return 1;
   }
 
   template<typename T>
-  std::size_t insert(std::vector<std::shared_ptr<T>>&& c) {
+  std::size_t _insert(std::vector<std::shared_ptr<T>>&& c) {
     auto n = c.size();
     tasks.insert(tasks.end(), std::make_move_iterator(c.begin()), std::make_move_iterator(c.end()));
-    std::ranges::push_heap(tasks, value_compare());
+
+    if constexpr (!std::is_same_v<void, Prio>) {
+      std::ranges::push_heap(tasks, value_compare());
+    }
     return n;
   }
 

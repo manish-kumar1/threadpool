@@ -15,7 +15,7 @@
 decltype(auto) reduce_min(const std::vector<int>& data, thp::threadpool& tp) {
   using pf = thp::part_algo<decltype(data.begin())>;
   pf algo(data.begin(), data.end());
-  algo.step = data.size()/16; //250000; // tune it for your data size
+  algo.step = data.size()/tp.num_workers(); //250000; // tune it for your data size
   if (algo.step == 0) algo.step = 1;
 
   auto [f] = tp.reduce(data.begin(), data.end(),
@@ -30,7 +30,7 @@ decltype(auto) reduce_min(const std::vector<int>& data, thp::threadpool& tp) {
 int main(int argc, const char* const argv[])
 {
   // Initialize Google's logging library.
-  google::InitGoogleLogging(argv[0]);
+  //google::InitGoogleLogging(argv[0]);
   int use_stl = argc > 1;
   try {
     std::random_device r;
@@ -55,8 +55,8 @@ int main(int argc, const char* const argv[])
     }
     else
     {
-      thp::threadpool tp;
       cu.now();
+      thp::threadpool tp;
       auto tmin = reduce_min(data, std::ref(tp));    
       cu.now();
       //std::cerr << std::format("thp({}): {} ms, ans = {}\n", data.size(), cu.get_ms(), tmin);

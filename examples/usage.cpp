@@ -137,9 +137,8 @@ int main(int argc, const char* const argv[])
   auto p9 = std::make_shared<time_series_task<3, void, system_clock>>(print, "9"); p9->after(5s, 10s, 5s); //
   auto p10 = std::make_shared<time_series_task<5, unsigned, system_clock>>(factorial, 12); p10->after(5*us, 6*us, 5*us, 7*us, 8*us); //
 
-  auto&& [f10] = tp.schedule(p10);
+  auto&& [f9, f10] = tp.schedule(p9, p10);
   auto pf = f10.get();
-  //for (int i = 0; i < 3; ++i) std::cout << "series: " << (*f)[i].get() << '\n';
 
   try {
     for(auto&& f : *pf) std::cout << "series: " << f.get() << '\n';

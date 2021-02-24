@@ -55,15 +55,13 @@ public:
 
   template <typename C>
   constexpr decltype(auto) schedule_task(C&& t) {
-    using TaskType = traits::FindTaskType<C>::type;
-
     auto futs = collect_future(std::forward<C>(t));
-    num_tasks += taskq_for<TaskType>().put(std::forward<C>(t));
+    insert_task(std::forward<C>(t));
     return futs;
   }
 
   template <typename C>
-  constexpr decltype(auto) insert_task(C&& t) {
+  constexpr void insert_task(C&& t) {
     using TaskType = traits::FindTaskType<C>::type;
     num_tasks += taskq_for<TaskType>().put(std::forward<C>(t));
   }
@@ -74,13 +72,13 @@ public:
   void drain() {
     cond_full.notify_all();
     std::unique_lock l(wmtx);
-    cond_empty.wait(l, [this] { return empty(); });
+    cond_empty.wait(l, [this] { return empty() && cur_output->empty() && old_output->empty(); });
   }
 
   void notify_reschedule()      { sched_cond.notify_one(); }
 
   void schedule_fn(managed_stop_token st) {
-    statistics stats{std::chrono::system_clock::now(), {{all_qs, num_tasks.load(), 2}, {cur_output, 0}}, {16, 16} };
+    statistics stats{std::chrono::system_clock::now(), {{all_qs, num_tasks.load(), -1}, {cur_output, 0}}, {16, 16} };
 
     for(;;) {
       thread_local bool ne = false;
@@ -88,7 +86,10 @@ public:
       stats.jobq.out.cur_output = old_output;
       {
         std::shared_lock l(mu);
-        ne = sched_cond.wait_for(l, st, Static::scheduler_tick(), [&] { return !empty(); });
+        //auto x = std::chrono::high_resolution_clock::now();
+        ne = sched_cond.wait_for(l, st, Static::scheduler_tick(), [&] { return !(empty() && old_output->empty()); });
+        //auto y = std::chrono::high_resolution_clock::now();
+        //std::cerr << "scheduler_tick: " <<  std::chrono::duration<double, std::nano>(y-x).count() << std::endl;
         if (st.stop_requested()) break;
         if (st.pause_requested()) {
           l.unlock();
@@ -99,15 +100,18 @@ public:
       if (ne)
       {
         //  compute_stats(stats);
-        scheduler.apply(stats);
+        if (!empty()) {
+          scheduler.apply(stats);
+          num_tasks -= stats.jobq.out.new_tasks;
+        }
         {
           std::unique_lock l(wmtx);
           if (cur_output->empty()) {
             std::swap(cur_output, old_output);
             stats.jobq.out.new_tasks = cur_output->size();
+            //num_tasks -= cur_output->size();
           }
         }
-        //std::cerr << std::this_thread::get_id() << " schedule_fn ne: " << num_tasks.load() << ", " << ne << std::endl;
       }
       else
         cond_empty.notify_one();
@@ -133,8 +137,7 @@ public:
         }
         t = std::move(cur_output->front());
         cur_output->pop_front();
-        --num_tasks;
-      //  std::cerr << std::this_thread::get_id() << "worker_fn: " << num_tasks.load() << ", " << t << std::endl;
+        //--num_tasks;
       }
       t->execute();
     }
@@ -195,13 +198,11 @@ protected:
 //    compute_algo_stats(stats.algo);
 //  }
 
-  //void check_stop();
-
   inline bool empty() const { return num_tasks == 0;   }
 
 private:
   mutable std::shared_mutex mu, wmtx;
-  std::atomic<int> num_tasks;
+  std::atomic<int> num_tasks, completed_tasks;
   task_scheduler scheduler;
   // task queues for different task types
   TaskQueueTupleType task_qs;

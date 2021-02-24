@@ -6,7 +6,7 @@
 #include <future>
 #include <ranges>
 #include <iterator>
-#include <mutex>
+#include <shared_mutex>
 #include <vector>
 
 namespace thp {
@@ -35,7 +35,7 @@ private:
   template<typename C, typename I>
   friend class details::sync_container_iterator;
 
-  std::mutex mu;
+  std::shared_mutex mu;
   std::condition_variable_any cond;
   size_t cur_size;
   size_t buf_len;
@@ -58,7 +58,7 @@ public:
   }
 
   auto size() {
-    std::unique_lock l(mu);
+    std::shared_lock l(mu);
     return data.size();
   }
 
@@ -71,7 +71,7 @@ public:
   }
 
   decltype(auto) put(T& item) {
-    std::unique_lock l(mu);
+    std::lock_guard l(mu);
     data.emplace_back(item);
     ++cur_size;
     cond.notify_one();
@@ -79,7 +79,7 @@ public:
   }
 
   decltype(auto) put(const T& item) {
-    std::unique_lock l(mu);
+    std::lock_guard l(mu);
     data.emplace_back(item);
     ++cur_size;
     cond.notify_one();
@@ -87,7 +87,7 @@ public:
   }
 
   decltype(auto) put(T&& item) {
-    std::unique_lock l(mu);
+    std::lock_guard l(mu);
     data.emplace_back(std::move(item));
     ++cur_size;
     cond.notify_one();
@@ -120,14 +120,14 @@ public:
 private:
   const T& accept(size_t at) const {
     std::unique_lock l(mu);
-    std::cerr << "const accept(" << at << ")" << at << ", " << cur_size << ", " << buf_len << std::endl;
+    //std::cerr << "const accept(" << at << ")" << at << ", " << cur_size << ", " << buf_len << std::endl;
     cond.wait(l, [&] { return at < cur_size; });
     return *std::next(data.cbegin(), at);
   }
 
   T& accept(size_t at) {
     std::unique_lock l(mu);
-    std::cerr << "accept(" << at << ")" << at << ", " << cur_size << ", " << buf_len << std::endl;
+    //std::cerr << "accept(" << at << ")" << at << ", " << cur_size << ", " << buf_len << std::endl;
     cond.wait(l, [&] { return at < cur_size; });
     return *std::next(data.begin(), at);
   }

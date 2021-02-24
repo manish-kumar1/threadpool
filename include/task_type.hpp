@@ -14,27 +14,29 @@
 
 namespace thp {
 
-template<typename T>
-struct regular_task;
-
-template <typename Ret, typename... Args>
-struct regular_task<Ret(Args...)> : public virtual executable, public std::packaged_task<Ret(Args...)> {
-
-  template <typename Fn>
-  constexpr regular_task(Fn&& fn)
-    : std::packaged_task<Ret(Args...)>{std::forward<Fn>(fn)}
+template <typename Ret>
+class regular_task: public virtual executable {
+public:
+  template <typename Fn, typename...Args>
+  requires std::regular_invocable<Fn,Args...>
+           && std::same_as<Ret, std::invoke_result_t<Fn,Args...>>
+  constexpr explicit regular_task(Fn&& fn, Args&&... args)
+    : pt{std::bind(std::forward<Fn>(fn), std::forward<Args>(args)...)}
   {}
 
   regular_task(regular_task&&) = default;
   regular_task& operator = (regular_task&&) = default;
 
   void execute() override {
-    this->operator()();
+    pt();
   }
 
-  std::future<Ret> future() { return this->get_future(); }
+  std::future<Ret> future() { return pt.get_future(); }
 
-  virtual ~regular_task() = default;
+  virtual ~regular_task() noexcept = default;
+
+protected:
+  std::packaged_task<Ret()> pt;
 };
 
 template<typename Prio = void>
@@ -42,7 +44,7 @@ template<typename Prio = void>
 struct comparable_task : virtual public executable {
   using PriorityType = Prio;
 
-  constexpr comparable_task() = default;
+  constexpr explicit comparable_task() = default;
 
   comparable_task(comparable_task&&) = default;
   comparable_task& operator = (comparable_task&&) = default;
@@ -63,7 +65,7 @@ struct comparable_task : virtual public executable {
     return this->priority <=> rhs.priority;
   }
 
-  virtual ~comparable_task() = default;
+  virtual ~comparable_task() noexcept = default;
 protected:
   Prio priority;
 };
@@ -80,17 +82,15 @@ struct comparable_task<void> : virtual public executable {
 };
 
 template <typename Ret, typename Prio>
-class priority_task : virtual public comparable_task<Prio>, virtual public executable {
+class priority_task : public regular_task<Ret>, public comparable_task<Prio> {
 public:
   using ReturnType = Ret;
   using PriorityType = Prio;
 
   template <typename Fn, typename... Args>
-  requires std::regular_invocable<Fn,Args...>
-           && std::same_as<Ret, std::invoke_result_t<Fn,Args...>>
   constexpr explicit priority_task(Fn &&fn, Args &&... args)
-    : comparable_task<Prio>()
-    , pt{std::bind(std::forward<Fn>(fn), std::forward<Args>(args)...)}
+    : regular_task<Ret>{std::bind(std::forward<Fn>(fn), std::forward<Args>(args)...)}
+    , comparable_task<Prio>{}
   {}
 
   priority_task(priority_task&&) = default;
@@ -100,14 +100,7 @@ public:
     return oss;
   }
 
-  std::future<Ret> future() { return pt.get_future(); }
-
-  void execute() override { pt(); }
-
-  virtual ~priority_task() = default;
-
-protected:
-  std::packaged_task<Ret()> pt;
+  virtual ~priority_task() noexcept = default;
 };
 
 template<typename T>

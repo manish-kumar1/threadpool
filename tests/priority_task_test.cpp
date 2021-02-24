@@ -55,15 +55,15 @@ TEST(PriorityTaskTest, qorder) {
   t2->set_priority(2);
   t3->set_priority(3);
 
-  thp::priority_taskq<decltype(t1)> q;
+  thp::priority_taskq<int> q;
   q.put(std::move(t3));
   q.put(std::move(t1));
   q.put(std::move(t2));
   std::shared_ptr<thp::executable> t;
   q.pop(t);
   t->execute();
-  EXPECT_TRUE(f1.valid());
-  EXPECT_NE(1, f1.get());
+  EXPECT_TRUE(f3.valid());
+  EXPECT_EQ(6, f3.get());
 }
 
 } // namespace

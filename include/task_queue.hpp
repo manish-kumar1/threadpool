@@ -144,7 +144,7 @@ protected:
     tasks.insert(tasks.end(), std::make_move_iterator(c.begin()), std::make_move_iterator(c.end()));
 
     if constexpr (!std::is_same_v<void, Prio>) {
-      std::ranges::push_heap(tasks, value_compare());
+      std::ranges::make_heap(tasks, value_compare());
     }
     return n;
   }

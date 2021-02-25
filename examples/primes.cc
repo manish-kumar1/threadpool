@@ -70,8 +70,9 @@ int main(int argc, const char* const argv[]) {
 
     unsigned num_primes = 0;
     std::ranges::for_each(primes, [&](auto&& f) {
-         auto v = f.get();
+         auto&& v = f.get();
          num_primes += v.size();
+         //std::ranges::copy(v, std::ostream_iterator<unsigned>(std::cerr, "\n"));
          std::copy_n(v.begin(), 10, std::ostream_iterator<unsigned>(std::cerr, "\n"));
     });
     std::cerr << "total primes: " << num_primes << std::endl;

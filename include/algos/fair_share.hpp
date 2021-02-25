@@ -40,7 +40,7 @@ public:
     }
     stats.jobq.out.new_tasks = output.size() - n;
   }
-      
+
   int apply(statistics& stats, std::thread::id tid) override {
     return 0;
   }

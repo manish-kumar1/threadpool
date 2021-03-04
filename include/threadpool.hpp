@@ -58,6 +58,53 @@ public:
     return schedule(make_task(std::forward<Fn>(fn), std::forward<Args>(args)...));
   }
 
+  template <std::random_access_iterator I, std::sentinel_for<I> S,
+            typename Comp = std::ranges::less, typename Proj = std::identity>
+  requires std::sortable<I, Comp, Proj>
+  constexpr I sort(I s, S e, Comp comp = {}, Proj proj = {}) {
+    auto len = std::ranges::distance(s, e);
+    //std::cerr << "sort:(" << len << ")" << std::endl;
+    if (len <= 100000)
+        std::ranges::sort(s, e, comp, proj);
+    else {
+        auto step = std::min(100000l, len/std::thread::hardware_concurrency());
+        using len_t = decltype(len);
+        auto tmp2 = make_task(std::ranges::inplace_merge, std::ranges::next(s, 0), std::ranges::next(s, 2), std::ranges::next(s, 5), comp);
+
+        auto total_partitions = len % step == 0 ? len/step : (len/step + 1);
+        std::vector<std::shared_ptr<simple_task<I>>> tasks;
+        tasks.reserve(total_partitions);
+        for (len_t i = 0; i < len; i += step) {
+          tasks.emplace_back(make_task(&threadpool::sort<I, S, Comp, Proj>, this, s+i, s+std::min(i+step, len), comp, proj));
+        }
+
+        auto [futs] = schedule(std::move(tasks));
+        std::ranges::for_each(futs, [](auto&& f) { f.get(); });
+        // merge
+        len_t range_size = 0;
+        for(range_size = step; range_size < len; range_size *= 2) {
+          std::vector<std::shared_ptr<simple_task<I>>> merge_tasks;
+          merge_tasks.reserve(1+ (len-1)/(2*range_size));
+          for (len_t i = 0; i < len; i += 2*range_size) {
+            auto ii = i;
+            auto mm = std::min(len, ii+range_size);
+            auto ll = std::min(len, mm+range_size);
+            //std::cerr << ii << ", " << mm << ", " << ll << ", " << range_size << std::endl;
+            merge_tasks.emplace_back(make_task(std::ranges::inplace_merge, s+ii, s+mm, s+ll, comp));
+          }
+          //std::cerr << std::endl;
+          auto [mf] = schedule(std::move(merge_tasks));
+          std::ranges::for_each(mf, [](auto&& f) { f.get(); });
+          //std::ranges::copy(s, e, std::ostream_iterator<decltype(*s)>(std::cerr, ", ")); std::cerr << std::endl;
+        }
+
+        if (total_partitions % 2 != 0) {
+          std::ranges::inplace_merge(s, std::next(s, range_size/2), e, comp);
+        }
+    }
+    return s;
+  }
+
   // parallel algorithm, for benchmarks see examples/reduce.cpp
   template <
     std::input_iterator I, std::sentinel_for<I> S,
@@ -98,6 +145,10 @@ public:
       return std::transform_reduce(futs.begin(), futs.end(), init, rdc_fn,
                                    [](auto&& fut) mutable { return std::move(fut.get()); });
     });
+  }
+
+  std::size_t size() const {
+    return jobq_.size();
   }
 
   template<typename InputIter, typename Fn>

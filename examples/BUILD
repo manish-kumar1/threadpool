@@ -45,3 +45,12 @@ cc_binary(
   linkopts = link_flags + ["-lstdc++fs"],
   visibility = ["//visibility:public"],
 )
+
+cc_binary(
+  name = "sort",
+  srcs = ["sort.cpp"],
+  copts = copt_flags,
+  deps = ["//:lib_thp",],
+  linkopts = link_flags,
+  visibility = ["//visibility:public"],
+)

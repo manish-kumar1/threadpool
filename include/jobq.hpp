@@ -43,6 +43,7 @@ public:
   : mu{}
   , wmtx{}
   , num_tasks{0}
+  , busy_workers{0}
   , scheduler{}
   , task_qs{create_taskqs_tuple(std::make_index_sequence<NumQs>{})}
   , all_qs{}
@@ -73,7 +74,7 @@ public:
   void drain() {
     cond_full.notify_all();
     std::unique_lock l(wmtx);
-    cond_empty.wait(l, [this] { return empty() && cur_output->empty() && old_output->empty(); });
+    cond_empty.wait(l, [this] { return (busy_workers == 0) && empty() && cur_output->empty() && old_output->empty(); });
   }
 
   void notify_reschedule()      { sched_cond.notify_one(); }
@@ -152,14 +153,16 @@ public:
         t = std::move(cur_output->front());
         cur_output->pop_front();
       }
-      //std::cerr << std::this_thread::get_id() << " workinge" << std::endl;
+      //std::cerr << std::this_thread::get_id() << " working" << std::endl;
+
+      ++busy_workers;
       t->execute();
-      //if (empty()) cond_empty.notify_all();
+      --busy_workers;
     }
     //std::cerr << std::this_thread::get_id() << " done" << std::endl;
   }
 
-  ~job_queue() = default;
+  //~job_queue() = default;
 
   template <typename C>
   constexpr decltype(auto) collect_future(C&& t)
@@ -184,6 +187,11 @@ public:
     }
   }
 
+  std::size_t size() const {
+    std::scoped_lock l(mu, wmtx);
+    return num_tasks + cur_output->size() + old_output->size();
+  }
+
 protected:
 
   friend class scheduler;
@@ -199,6 +207,7 @@ protected:
   constexpr TaskQueueTupleType create_taskqs_tuple(std::index_sequence<I...>) {
     return std::make_tuple(std::tuple_element_t<I, TaskQueueTupleType>()...);
   }
+
   template <typename TaskType>
   constexpr inline auto& taskq_for(void) {
 	  using T = priority_taskq<typename TaskType::PriorityType>;
@@ -217,7 +226,7 @@ protected:
 
 private:
   mutable std::shared_mutex mu, wmtx;
-  std::atomic<int> num_tasks;
+  std::atomic<int> num_tasks, busy_workers;
   task_scheduler scheduler;
   // task queues for different task types
   TaskQueueTupleType task_qs;

@@ -10,6 +10,8 @@
 #include <type_traits>
 #include <vector>
 #include <stop_token>
+#include <algorithm>
+#include <cmath>
 
 #include "include/util.hpp"
 #include "include/jobq.hpp"
@@ -62,22 +64,22 @@ public:
             typename Comp = std::ranges::less, typename Proj = std::identity>
   requires std::sortable<I, Comp, Proj>
   constexpr I sort(I s, S e, Comp comp = {}, Proj proj = {}) {
-    auto len = std::ranges::distance(s, e);
+    unsigned len = std::ranges::distance(s, e);
     //std::cerr << "sort:(" << len << ")" << std::endl;
-    if (len <= 100000)
+    if (len <= 500000)
         std::ranges::sort(s, e, comp, proj);
     else {
-        auto step = std::min(100000l, len/std::thread::hardware_concurrency());
+        auto step = 500000u; //std::clamp(len/std::thread::hardware_concurrency(), 500000u, 500000u);
         using len_t = decltype(len);
-        auto tmp2 = make_task(std::ranges::inplace_merge, std::ranges::next(s, 0), std::ranges::next(s, 2), std::ranges::next(s, 5), comp);
 
-        auto total_partitions = len % step == 0 ? len/step : (len/step + 1);
+        unsigned total_partitions = std::ceil(len/step);
         std::vector<std::shared_ptr<simple_task<I>>> tasks;
         tasks.reserve(total_partitions);
         for (len_t i = 0; i < len; i += step) {
           tasks.emplace_back(make_task(&threadpool::sort<I, S, Comp, Proj>, this, s+i, s+std::min(i+step, len), comp, proj));
         }
 
+        //std::cerr << "total partition: " << tasks.size() << std::endl;
         auto [futs] = schedule(std::move(tasks));
         std::ranges::for_each(futs, [](auto&& f) { f.get(); });
         // merge
@@ -85,6 +87,7 @@ public:
         for(range_size = step; range_size < len; range_size *= 2) {
           std::vector<std::shared_ptr<simple_task<I>>> merge_tasks;
           merge_tasks.reserve(1+ (len-1)/(2*range_size));
+          //merge_tasks.reserve(std::ceil(total_partitions/(2*two)));
           for (len_t i = 0; i < len; i += 2*range_size) {
             auto ii = i;
             auto mm = std::min(len, ii+range_size);

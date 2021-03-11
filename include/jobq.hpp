@@ -35,7 +35,6 @@ struct jobq_closed_ex final : std::exception {
 // job queue manages several task queues
 template <typename TaskQueueTupleType>
 class job_queue {
-  //using TaskQueueTupleType = TaskQueueTuple<Tup>::type;
   static const auto NumQs = std::tuple_size_v<TaskQueueTupleType>;
 
 public:
@@ -94,7 +93,8 @@ public:
         ne = sched_cond.wait(l, st, [&] {
               //auto cur_num_tasks = num_tasks.load();
               const auto need_schedule = (num_tasks > 0) || (!old_output->empty());
-              //std::cerr << std::this_thread::get_id() << " schedule_fn1: " << num_tasks.load() << ", " << cur_num_tasks << ", " << need_schedule << ", " << old_output->size() << std::endl;
+              //std::cerr << std::this_thread::get_id() << " schedule_fn1: " << num_tasks.load() 
+              // << ", " << cur_num_tasks << ", " << need_schedule << ", " << old_output->size() << std::endl;
               if (!need_schedule) cond_empty.notify_all();
               return need_schedule;
             });
@@ -149,7 +149,9 @@ public:
           l.unlock();
           st.pause();
           l.lock();
+          continue;
         }
+
         t = std::move(cur_output->front());
         cur_output->pop_front();
       }

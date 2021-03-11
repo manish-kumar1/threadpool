@@ -70,27 +70,13 @@ public:
     cur_size = 0;
   }
 
-  decltype(auto) put(T& item) {
-    std::lock_guard l(mu);
-    data.emplace_back(item);
-    ++cur_size;
-    cond.notify_one();
-    return *this;
-  }
 
-  decltype(auto) put(const T& item) {
+  template<typename... Data>
+  decltype(auto) put(Data&&... items) {
+    //static_assert(std::is_same_v<T, std::decay_t<Data>> && ...);
     std::lock_guard l(mu);
-    data.emplace_back(item);
-    ++cur_size;
-    cond.notify_one();
-    return *this;
-  }
-
-  decltype(auto) put(T&& item) {
-    std::lock_guard l(mu);
-    data.emplace_back(std::move(item));
-    ++cur_size;
-    cond.notify_one();
+    data.emplace_back(std::forward<Data>(items)...);
+    cur_size += sizeof...(Data);
     return *this;
   }
 

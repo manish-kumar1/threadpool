@@ -22,12 +22,11 @@ void sort_thp(threadpool& tp, Data& data) {
   tp.drain();
 }
 
-
 int main(int argc, const char* const argv[]) {
   util::clock_util<chrono::steady_clock> cp;
   const unsigned  times = 10*1000000; // 10 million
   auto N = argc > 1 ? stoi(argv[1]) : times;
-  bool use_stl = false;
+  bool use_stl = argc > 2 ? true : false;
 
   std::locale::global(std::locale(""));
   std::cerr.imbue(std::locale(""));
@@ -36,12 +35,15 @@ int main(int argc, const char* const argv[]) {
     thp::threadpool tp;
     std::random_device r;
     std::default_random_engine e(r());
-    std::uniform_int_distribution<int> dis(numeric_limits<int>::min()+1, numeric_limits<int>::max()-1);
-    //std::uniform_int_distribution<char> dis('a', 'z');
+    //std::uniform_int_distribution<int> dis(numeric_limits<int>::min()+1, numeric_limits<int>::max()-1);
+    std::uniform_int_distribution<char> dis('a', 'z');
 
-    std::cerr << "size          time(ms)    is_sorted     stl(ms)" << std::endl;
+    std::cerr << std::setw(14) << "size"
+              << std::setw(14) << "time (ms)"
+              << std::setw(14) << "is_sorted"
+              << std::setw(14) << "stl(ms)" << std::endl;
     for(unsigned n = 10; n <= N; n *= 10) {
-      std::vector<int> data;
+      std::vector<char> data;
       data.reserve(n);
 
       std::generate_n(std::back_inserter(data), n, [&] { return dis(e); });
@@ -50,7 +52,9 @@ int main(int argc, const char* const argv[]) {
       sort_thp(tp, data);
       cp.now();
 
-      std::cerr << std::left << std::setw(14) << data.size() << std::setw(8) << cp.get_ms() << std::right << std::setw(10) << std::ranges::is_sorted(data);
+      std::cerr << std::right << std::setw(14) << data.size()
+                << std::setw(14) << cp.get_ms()
+                << std::setw(14) << std::ranges::is_sorted(data);
 
       if (use_stl) {
         std::generate_n(data.begin(), n, [&] { return dis(e); });

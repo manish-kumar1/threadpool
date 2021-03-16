@@ -1,5 +1,5 @@
-load("//:compilation.bzl", "copt_flags")
-load("//:compilation.bzl", "link_flags")
+load("//:compilation.bzl", "copt_flags", "link_flags")
+#load("//:compilation.bzl", "link_flags")
 
 cc_binary(
   name = "primes",

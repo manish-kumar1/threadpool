@@ -10,8 +10,8 @@
 int main(int argc, const char* const argv[])
 {
   // Initialize Google's logging library.
-  google::InitGoogleLogging(argv[0]);
-  LOG(INFO) << "Hello from threadpool!";
+  //google::InitGoogleLogging(argv[0]);
+  //LOG(INFO) << "Hello from threadpool!";
   
   thp::threadpool tp;
 

@@ -34,7 +34,7 @@ int main(int argc, const char* const argv[])
   //google::InitGoogleLogging(argv[0]);
   
   const unsigned n = argc > 1 ? std::stoi(argv[1]) : 40*1000000; // 40 million
-  bool use_stl = true;
+  bool use_stl = false;
 
   std::locale::global(std::locale(""));
   std::cerr.imbue(std::locale(""));
@@ -47,7 +47,7 @@ int main(int argc, const char* const argv[])
     std::vector<int> data;
     data.reserve(n);
     std::generate_n(std::back_inserter(data), n, [&] { return dis(engine); });
-    //if (use_stl)
+    if (use_stl)
     {
       cu.now();
       auto smin = std::transform_reduce(std::execution::par,
@@ -59,7 +59,7 @@ int main(int argc, const char* const argv[])
       cu.now();
       std::cerr << "stl(" << data.size() << "): " << cu.get_ms() << " ms" << ", ans = " << smin << std::endl;
     }
-    //else
+    else
     {
       cu.now();
       thp::threadpool tp;

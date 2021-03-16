@@ -42,7 +42,7 @@ auto find_prime(unsigned s, unsigned e) {
   std::vector<unsigned> ret;
   //auto x = s == 0 ? 0.01*(e-s) : std::ceil((e-s)/std::log(s));
   //ret.reserve(x);
-  ret.reserve(static_cast<unsigned>(0.05*(e-s)));
+  ret.reserve(static_cast<unsigned>(0.01*(e-s)));
   for (unsigned i = s; i < e; ++i)
     if (is_prime(i)) ret.push_back(i);
 
@@ -75,7 +75,7 @@ auto seq_prime(unsigned int N) {
 
 auto check_prime(thp::threadpool* tp, const unsigned int n = 10*1000000) {
   std::vector<std::shared_ptr<simple_task<std::vector<unsigned>>>> tasks;
-  auto step = std::clamp(n/std::thread::hardware_concurrency(), 50000u, 500000u);
+  auto step = std::clamp(n/std::thread::hardware_concurrency(), 50000u, 1000000u);
   tasks.reserve(std::ceil(n/step));
   util::clock_util<chrono::steady_clock> cp;
   for (unsigned int i = 0; i < n; i += step) {

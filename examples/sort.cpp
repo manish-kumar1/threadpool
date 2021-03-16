@@ -8,6 +8,7 @@
 #include <ranges>
 #include <locale>
 #include <iomanip>
+#include <execution>
 
 #include "include/threadpool.hpp"
 #include "include/clock_util.hpp"
@@ -26,24 +27,25 @@ int main(int argc, const char* const argv[]) {
   util::clock_util<chrono::steady_clock> cp;
   const unsigned  times = 10*1000000; // 10 million
   auto N = argc > 1 ? stoi(argv[1]) : times;
-  bool use_stl = argc > 2 ? true : false;
+  auto workers = argc > 2 ? stoi(argv[2]) : std::thread::hardware_concurrency();
+  bool use_stl = argc > 3 ? true : false;
 
   std::locale::global(std::locale(""));
   std::cerr.imbue(std::locale(""));
 
   try {
-    thp::threadpool tp;
+    thp::threadpool tp(workers);
     std::random_device r;
     std::default_random_engine e(r());
-    //std::uniform_int_distribution<int> dis(numeric_limits<int>::min()+1, numeric_limits<int>::max()-1);
-    std::uniform_int_distribution<char> dis('a', 'z');
+    std::uniform_int_distribution<int> dis(numeric_limits<int>::min()+1, numeric_limits<int>::max()-1);
+    //std::uniform_int_distribution<char> dis('a', 'z');
 
     std::cerr << std::setw(14) << "size"
               << std::setw(14) << "time (ms)"
               << std::setw(14) << "is_sorted"
               << std::setw(14) << "stl(ms)" << std::endl;
     for(unsigned n = 10; n <= N; n *= 10) {
-      std::vector<char> data;
+      std::vector<int> data;
       data.reserve(n);
 
       std::generate_n(std::back_inserter(data), n, [&] { return dis(e); });
@@ -59,7 +61,7 @@ int main(int argc, const char* const argv[]) {
       if (use_stl) {
         std::generate_n(data.begin(), n, [&] { return dis(e); });
         cp.now();
-        std::sort(data.begin(), data.end());
+        std::sort(std::execution::par, data.begin(), data.end());
         cp.now();
 
         std::cerr << std::setw(14) << cp.get_ms();

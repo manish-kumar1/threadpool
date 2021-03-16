@@ -66,10 +66,10 @@ public:
   constexpr I sort(I s, S e, Comp comp = {}, Proj proj = {}) {
     unsigned len = std::ranges::distance(s, e);
     //std::cerr << "sort:(" << len << ")" << std::endl;
-    if (len <= 500000)
+    if (len <= 1000000u)
         std::ranges::sort(s, e, comp, proj);
     else {
-        auto step = 500000u; //std::clamp(len/std::thread::hardware_concurrency(), 500000u, 500000u);
+        auto step = std::clamp(len/num_workers(), 100000u, 1000000u);
         using len_t = decltype(len);
 
         unsigned total_partitions = std::ceil(len/step);

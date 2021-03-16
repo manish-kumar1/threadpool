@@ -15,8 +15,9 @@
 namespace rng = std::ranges;
 
 using Val = int;
-constexpr size_t N = 256*4;
-using Matrix = std::array<std::array<Val, N>, N>;
+//constexpr size_t N = 256*4;
+//using Matrix = std::array<std::array<Val, N>, N>;
+using Matrix = std::vector<std::vector<Val>>;
 
 Matrix mat1, mat2, ans1, ans2;
 
@@ -44,7 +45,8 @@ decltype(auto) matmul_tp(const Matrix& mat1,
   };
   // mxn nxm => mxm
   auto mul3 = [&](const size_t cs, const size_t ce, const size_t step) {
-    auto tile = [&] (const size_t j, const size_t rs, const size_t re, std::shared_ptr<std::array<Val, N>> col) {
+    auto tile = [&] (const size_t j, const size_t rs, const size_t re, std::shared_ptr<std::vector<Val>> col) {
+      
       for (size_t i = rs; i < re; ++i) {
         ans[i][j] = std::inner_product(mat1[i].begin(), mat1[i].begin()+n, (*col).cbegin(), 0, std::plus<>(), std::multiplies<>());
       }
@@ -53,7 +55,7 @@ decltype(auto) matmul_tp(const Matrix& mat1,
     std::vector<std::shared_ptr<thp::simple_task<void>>> tasks;
     for (auto c = cs; c < ce; ++c)
       for(size_t i = 0; i < n; i += step) {
-        auto col_vec = std::make_shared<std::array<Val, N>>();
+        auto col_vec = std::make_shared<std::vector<Val>>(n, 0);
         rng::transform(mat2, col_vec->begin(), [c](auto&& r) { return r[c]; });
         //tp.enqueue(tile, c, i, std::min(n, i+step), col_vec);
         tasks.emplace_back(thp::make_task(tile, c, i, std::min(n, i+step), col_vec));
@@ -121,37 +123,45 @@ int main(int argc, const char* const argv[])
   // Initialize Google's logging library.
   //google::InitGoogleLogging(argv[0]);
 
-  bool verify = argc > 1 ? true : false;
+  size_t N = argc > 1 ? std::stoi(argv[1]) : 1024u;
+  size_t step = argc > 2 ? std::stoi(argv[2]) : 128;
+  bool verify = argc > 3 ? true : false;
+
   try {
+    thp::util::clock_util<std::chrono::steady_clock> cu;
     // generate data
-    for(size_t n = 128; n <= N; n += 128) {
+    for(size_t n = step; n <= N; n += step) {
       std::random_device r;
       std::default_random_engine engine(r());
       std::uniform_int_distribution<Val> dis(-4200, +4200);
 
-      rng::for_each(mat1, [](auto& m) { rng::fill(m, 0); });
-      rng::for_each(mat2, [](auto& m) { rng::fill(m, 0); });
-      rng::for_each(ans1, [](auto& m) { rng::fill(m, 0); });
-      rng::for_each(ans2, [](auto& m) { rng::fill(m, 0); });
+      mat1.resize(n);
+      mat2.resize(n);
+      ans1.resize(n);
+      ans2.resize(n);
+
+      rng::for_each(mat1, [&](auto& m) { m.resize(n); rng::fill(m, 0); });
+      rng::for_each(mat2, [&](auto& m) { m.resize(n); rng::fill(m, 0); });
+      rng::for_each(ans1, [&](auto& m) { m.resize(n); rng::fill(m, 0); });
+      rng::for_each(ans2, [&](auto& m) { m.resize(n); rng::fill(m, 0); });
 
       for(auto i = 0u; i < n; ++i) {
         auto& row1 = mat1[i];
         auto& row2 = mat2[i];
         std::generate_n(row1.begin(), n, [&] { return dis(engine); });
         std::generate_n(row2.begin(), n, [&] { return dis(engine); });
+        //rng::copy(row1, std::ostream_iterator<Val>(std::cerr, ", ")); std::cerr << std::endl;
+        //rng::copy(row2, std::ostream_iterator<Val>(std::cerr, ", ")); std::cerr << std::endl;
       }
       {
         thp::threadpool tp;
-        thp::util::clock_util<std::chrono::steady_clock> cu;
         cu.now();
         matmul_tp(mat1, mat2, ans1, n, tp);
         cu.now();
         std::cerr << "thp:    (" << n << "x" << n << ") = " << cu.get_ms() << " ms" << std::endl;
-        //tp.shutdown();
       }
       if (verify)
       {
-        thp::util::clock_util<std::chrono::steady_clock> cu;
         cu.now();
         matmul_normal(mat1, mat2, ans2, n);
         cu.now();

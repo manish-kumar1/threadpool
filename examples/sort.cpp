@@ -17,10 +17,10 @@ using namespace std;
 using namespace thp;
 using namespace chrono;
 
-template<typename Data>
-void sort_thp(threadpool& tp, Data& data) {
-  tp.sort(data.begin(), data.end());
-  tp.drain();
+template<typename T>
+void sort_thp(threadpool& tp, T& data) {
+  auto [fut] = tp.sort(data.begin(), data.end());
+  fut.get();
 }
 
 int main(int argc, const char* const argv[]) {
@@ -30,11 +30,11 @@ int main(int argc, const char* const argv[]) {
   auto workers = argc > 2 ? stoi(argv[2]) : std::thread::hardware_concurrency();
   bool use_stl = argc > 3 ? true : false;
 
-  std::locale::global(std::locale(""));
-  std::cerr.imbue(std::locale(""));
+  std::locale l("");
+  std::locale::global(l);
+  std::cerr.imbue(l);
 
   try {
-    thp::threadpool tp(workers);
     std::random_device r;
     std::default_random_engine e(r());
     std::uniform_int_distribution<int> dis(numeric_limits<int>::min()+1, numeric_limits<int>::max()-1);
@@ -45,13 +45,15 @@ int main(int argc, const char* const argv[]) {
               << std::setw(14) << "is_sorted"
               << std::setw(14) << "stl(ms)" << std::endl;
     for(unsigned n = 10; n <= N; n *= 10) {
+      thp::threadpool tp(workers);
       std::vector<int> data;
       data.reserve(n);
 
       std::generate_n(std::back_inserter(data), n, [&] { return dis(e); });
 
       cp.now();
-      sort_thp(tp, data);
+      auto [fut] = tp.sort(data.begin(), data.end());
+      fut.get();
       cp.now();
 
       std::cerr << std::right << std::setw(14) << data.size()
@@ -59,7 +61,7 @@ int main(int argc, const char* const argv[]) {
                 << std::setw(14) << std::ranges::is_sorted(data);
 
       if (use_stl) {
-        std::generate_n(data.begin(), n, [&] { return dis(e); });
+        std::shuffle(data.begin(), data.end(), e);
         cp.now();
         std::sort(std::execution::par, data.begin(), data.end());
         cp.now();

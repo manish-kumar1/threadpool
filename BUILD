@@ -15,7 +15,12 @@ cc_binary(
   name = "threadpool",
   srcs = ["main.cc"],
   copts = copt_flags,
-  deps = [":lib_thp", "@glog//:glog", "@yaml-cpp//:yaml-cpp",],
+  deps = [
+          ":lib_thp",
+          "@glog//:glog",
+          "@yaml-cpp//:yaml-cpp",
+          "@spdlog//:spdlog"
+         ],
   visibility = ["//visibility:public"],
 )
 

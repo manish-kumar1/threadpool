@@ -12,6 +12,7 @@
 #include <stop_token>
 #include <algorithm>
 #include <cmath>
+#include <cassert>
 
 #include "include/util.hpp"
 #include "include/jobq.hpp"
@@ -27,6 +28,7 @@ namespace thp {
 
 class threadpool {
   using TaskQueueTupleType = TaskQueueTuple<AllPriorityTupleType>::type;
+
 public:
   explicit threadpool(unsigned max_threads = std::thread::hardware_concurrency());
 
@@ -63,49 +65,61 @@ public:
   template <std::random_access_iterator I, std::sentinel_for<I> S,
             typename Comp = std::ranges::less, typename Proj = std::identity>
   requires std::sortable<I, Comp, Proj>
-  constexpr I sort(I s, S e, Comp comp = {}, Proj proj = {}) {
-    unsigned len = std::ranges::distance(s, e);
-    //std::cerr << "sort:(" << len << ")" << std::endl;
-    if (len <= 1000000u)
+  constexpr decltype(auto) sort(I start, S end, Comp cmp = {}, Proj prj = {}) {
+
+    std::function<std::tuple<I,S>(I, S, Comp, Proj)> tp_sort = [this, &tp_sort](I s, S e, Comp comp, Proj proj) {
+      const std::size_t len = std::ranges::distance(s, e);
+      if (len <= Static::stl_sort_cutoff()) {
         std::ranges::sort(s, e, comp, proj);
-    else {
-        auto step = std::clamp(len/num_workers(), 100000u, 1000000u);
-        using len_t = decltype(len);
+      }
+      else {
+        // level merge of sorted ranges
+        auto level_merge_task = [this] (auto&& fut_vec) mutable {
+          //std::cerr << "level_merge_task: " << fut_vec.size() << std::endl;
+          auto one_merge = [](auto&& f1, auto&& f2) mutable {
+            auto [s1, e1] = f1.get();
+            auto [s2, e2] = f2.get();
+            assert(e1 == s2);
+            std::ranges::inplace_merge(s1, s2, e2);
+            return std::make_tuple(s1, e2);
+          };
 
-        unsigned total_partitions = std::ceil(len/step);
-        std::vector<std::shared_ptr<simple_task<I>>> tasks;
-        tasks.reserve(total_partitions);
-        for (len_t i = 0; i < len; i += step) {
-          tasks.emplace_back(make_task(&threadpool::sort<I, S, Comp, Proj>, this, s+i, s+std::min(i+step, len), comp, proj));
-        }
+          std::vector<std::shared_ptr<simple_task<std::tuple<I, S>>>> merge_tasks;
+          const auto n = fut_vec.size();
+          merge_tasks.reserve(n % 2 != 0 ? (1 + n/2) : n/2);
 
-        //std::cerr << "total partition: " << tasks.size() << std::endl;
-        auto [futs] = schedule(std::move(tasks));
-        std::ranges::for_each(futs, [](auto&& f) { f.get(); });
-        // merge
-        len_t range_size = 0;
-        for(range_size = step; range_size < len; range_size *= 2) {
-          std::vector<std::shared_ptr<simple_task<I>>> merge_tasks;
-          merge_tasks.reserve(1+ (len-1)/(2*range_size));
-          //merge_tasks.reserve(std::ceil(total_partitions/(2*two)));
-          for (len_t i = 0; i < len; i += 2*range_size) {
-            auto ii = i;
-            auto mm = std::min(len, ii+range_size);
-            auto ll = std::min(len, mm+range_size);
-            //std::cerr << ii << ", " << mm << ", " << ll << ", " << range_size << std::endl;
-            merge_tasks.emplace_back(make_task(std::ranges::inplace_merge, s+ii, s+mm, s+ll, comp));
+          for (size_t i = 0; i+1 < n; i += 2)
+            merge_tasks.emplace_back(make_task(one_merge, std::move(fut_vec[i]), std::move(fut_vec[i+1])));
+
+          auto next_fut_vec = jobq_.schedule_task(std::move(merge_tasks));
+          if (n % 2 != 0) {
+            next_fut_vec.emplace_back(std::move(fut_vec.back()));
+            fut_vec.pop_back();
           }
-          //std::cerr << std::endl;
-          auto [mf] = schedule(std::move(merge_tasks));
-          std::ranges::for_each(mf, [](auto&& f) { f.get(); });
-          //std::ranges::copy(s, e, std::ostream_iterator<decltype(*s)>(std::cerr, ", ")); std::cerr << std::endl;
+          //std::ranges::for_each(next_fut_vec, [](auto&& f) { f.get(); });
+
+          return next_fut_vec;
+        };
+
+        unsigned part_len = static_cast<unsigned>(len/std::thread::hardware_concurrency());
+        auto step = std::clamp(part_len, 100000u, Static::stl_sort_cutoff());
+        std::vector<std::shared_ptr<simple_task<std::tuple<I, S>>>> tasks;
+        tasks.reserve(std::ceil(len/step));
+        for(std::size_t i = 0; i < len; i += step)
+          tasks.emplace_back(make_task(tp_sort, s+i, s+std::min(i+step, len), comp, proj));
+
+        auto futs = jobq_.schedule_task(std::move(tasks));
+        while (futs.size() > 1) {
+          futs = level_merge_task(std::move(futs));
         }
 
-        if (total_partitions % 2 != 0) {
-          std::ranges::inplace_merge(s, std::next(s, range_size/2), e, comp);
-        }
-    }
-    return s;
+        std::ranges::for_each(futs, [](auto&& f) { f.get(); });
+      }
+      return std::make_tuple(s, e);
+    };
+
+    return enqueue(tp_sort, std::forward<I>(start), std::forward<S>(end),
+                            std::forward<Comp>(cmp), std::forward<Proj>(prj));
   }
 
   // parallel algorithm, for benchmarks see examples/reduce.cpp

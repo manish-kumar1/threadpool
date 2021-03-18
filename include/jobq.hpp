@@ -80,15 +80,15 @@ public:
 
   void schedule_fn(managed_stop_token st) {
     statistics stats{std::chrono::system_clock::now(), {{all_qs, num_tasks.load(), -1}, {cur_output, 0}}, {16, 16} };
-    unsigned last_num_tasks = 0u;
-    auto cur_num_tasks = num_tasks.load();
+    //unsigned last_num_tasks = 0u;
+    //auto cur_num_tasks = num_tasks.load();
 
     for(;;) {
       thread_local bool ne = false;
       stats.jobq.out.reset();
       stats.jobq.out.cur_output = old_output;
       {
-        std::shared_lock l(mu);
+        std::unique_lock l(mu);
         //auto x = std::chrono::high_resolution_clock::now();
         ne = sched_cond.wait(l, st, [&] {
               //auto cur_num_tasks = num_tasks.load();
@@ -133,7 +133,7 @@ public:
   void worker_fn(managed_stop_token st) {
     //std::cerr << "worker_fn: " << st << std::endl;
     for(;;) {
-      std::shared_ptr<executable> t{nullptr};
+      thread_local std::shared_ptr<executable> t{nullptr};
       {
         std::unique_lock l(wmtx);
         cond_full.wait(l, st, [&] {
@@ -224,11 +224,11 @@ protected:
 //    compute_algo_stats(stats.algo);
 //  }
 
-  inline bool empty() const { return num_tasks == 0;   }
+  inline bool empty() const { return num_tasks == 0u;   }
 
 private:
   mutable std::shared_mutex mu, wmtx;
-  std::atomic<int> num_tasks, busy_workers;
+  std::atomic<unsigned> num_tasks, busy_workers;
   task_scheduler scheduler;
   // task queues for different task types
   TaskQueueTupleType task_qs;

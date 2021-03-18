@@ -40,11 +40,12 @@ git_repository(
 git_repository(
   name = "yaml-cpp",
   remote = "https://github.com/jbeder/yaml-cpp.git",
-  commit = "b2f89386d8f88655e47c4be0c719073dd6308a21"
+  commit = "b2f89386d8f88655e47c4be0c719073dd6308a21",
+  shallow_since = "1583935156 -0500",
 )
 
 new_local_repository(
   name = "spdlog",
-  path = "./external/spdlog/",
-  build_file = "./external/spdlog.BUILD"
+  path = "external/spdlog/",
+  build_file = "external/spdlog.BUILD"
 )

@@ -9,7 +9,8 @@
 
 namespace thp {
 
-using AllPriorityTupleType = std::tuple<
+using AllPriorityTupleType = std::tuple<void>;
+using AllPriorityTupleType2 = std::tuple<
 void,
 int,
 float,

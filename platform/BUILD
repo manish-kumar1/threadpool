@@ -7,6 +7,6 @@ cc_library(
   hdrs = ["thread_config.h"],
   visibility = ["//visibility:public"],
   linkopts = ["-lpthread", ] + link_flags,
-  copts = ["-Wall", ] + copt_flags,
+  copts = copt_flags,
 )
 

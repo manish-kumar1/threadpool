@@ -95,8 +95,8 @@ int main(int argc, const char* const argv[]) {
   auto N = argc > 1 ? stoi(argv[1]) : 10*1000000;
   util::clock_util<chrono::steady_clock> cp;
 
-  std::locale::global(std::locale(""));
-  std::cerr.imbue(std::locale("")); 
+  //std::locale::global(std::locale(""));
+  //std::cerr.imbue(std::locale("")); 
  
   try {
     thp::threadpool tp;

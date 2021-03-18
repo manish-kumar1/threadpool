@@ -30,7 +30,7 @@ struct outputs {
 
 struct inputs {
   std::vector<task_queue*>& qs;
-  int num_tasks;
+  std::size_t num_tasks;
   int load_factor;
 };
 

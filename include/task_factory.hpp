@@ -14,14 +14,14 @@ namespace thp {
 template<typename Fn, typename... Args>
 [[nodiscard]] constexpr inline decltype(auto) make_task(Fn&& fn, Args&& ...args) {
   using Ret = std::invoke_result_t<Fn,Args...>;
-  return std::make_shared<simple_task<Ret>>(std::forward<Fn>(fn), std::forward<Args>(args)...);
+  return std::make_unique<simple_task<Ret>>(std::forward<Fn>(fn), std::forward<Args>(args)...);
 }
 
 template<typename Prio, typename Fn, typename... Args>
 [[nodiscard]] constexpr inline decltype(auto) make_task(Fn&& fn, Args&& ...args) {
   using Ret = std::invoke_result_t<Fn,Args...>;
   static_assert(compile_time::find<Prio, AllPriorityTupleType>() < std::tuple_size_v<AllPriorityTupleType>, "priority type not registered");
-  return std::make_shared<priority_task<Ret, Prio>>(std::forward<Fn>(fn), std::forward<Args>(args)...);
+  return std::make_unique<priority_task<Ret, Prio>>(std::forward<Fn>(fn), std::forward<Args>(args)...);
 }
 
 }

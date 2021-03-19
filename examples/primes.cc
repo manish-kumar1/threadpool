@@ -74,7 +74,7 @@ auto seq_prime(unsigned int N) {
 }
 
 auto check_prime(thp::threadpool* tp, const unsigned int n = 10*1000000) {
-  std::vector<std::shared_ptr<simple_task<std::vector<unsigned>>>> tasks;
+  std::vector<std::unique_ptr<simple_task<std::vector<unsigned>>>> tasks;
   auto step = std::clamp(n/std::thread::hardware_concurrency(), 50000u, 1000000u);
   tasks.reserve(std::ceil(n/step));
   util::clock_util<chrono::steady_clock> cp;

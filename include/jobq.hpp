@@ -57,6 +57,7 @@ public:
   constexpr decltype(auto) schedule_task(C&& t) {
     auto futs = collect_future(std::forward<C>(t));
     insert_task(std::forward<C>(t));
+    sched_cond.notify_one();
     return futs;
   }
 
@@ -64,7 +65,6 @@ public:
   constexpr void insert_task(C&& t) {
     using TaskType = traits::FindTaskType<C>::type;
     num_tasks += taskq_for<TaskType>().put(std::forward<C>(t));
-    sched_cond.notify_one();
   }
 
   void close() {}
@@ -133,7 +133,7 @@ public:
   void worker_fn(managed_stop_token st) {
     //std::cerr << "worker_fn: " << st << std::endl;
     for(;;) {
-      thread_local std::shared_ptr<executable> t{nullptr};
+      thread_local std::unique_ptr<executable> t{nullptr};
       {
         std::unique_lock l(wmtx);
         cond_full.wait(l, st, [&] {
@@ -233,7 +233,7 @@ private:
   // task queues for different task types
   TaskQueueTupleType task_qs;
   std::vector<task_queue*> all_qs;
-  std::deque<std::shared_ptr<executable>> tasks[2], *cur_output, *old_output;
+  std::deque<std::unique_ptr<executable>> tasks[2], *cur_output, *old_output;
   std::condition_variable_any cond_empty, cond_full, cond_stop, sched_cond;
   int registered_workers;
   bool closed, stopped;

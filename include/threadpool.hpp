@@ -84,7 +84,7 @@ public:
             return std::make_tuple(s1, e2);
           };
 
-          std::vector<std::shared_ptr<simple_task<std::tuple<I, S>>>> merge_tasks;
+          std::vector<std::unique_ptr<simple_task<std::tuple<I, S>>>> merge_tasks;
           const auto n = fut_vec.size();
           merge_tasks.reserve(n % 2 != 0 ? (1 + n/2) : n/2);
 
@@ -102,8 +102,8 @@ public:
         };
 
         unsigned part_len = static_cast<unsigned>(len/std::thread::hardware_concurrency());
-        auto step = std::clamp(part_len, 100000u, Static::stl_sort_cutoff());
-        std::vector<std::shared_ptr<simple_task<std::tuple<I, S>>>> tasks;
+        auto step = std::clamp(part_len, 2u, Static::stl_sort_cutoff());
+        std::vector<std::unique_ptr<simple_task<std::tuple<I, S>>>> tasks;
         tasks.reserve(std::ceil(len/step));
         for(std::size_t i = 0; i < len; i += step)
           tasks.emplace_back(make_task(tp_sort, s+i, s+std::min(i+step, len), comp, proj));
@@ -149,7 +149,7 @@ public:
       return std::transform_reduce(s1, e1, init, rdc_fn, tr_fn);
     };
 
-    std::vector<std::shared_ptr<simple_task<T>>> tasks;
+    std::vector<std::unique_ptr<simple_task<T>>> tasks;
     tasks.reserve(part.count());
 
     for (auto it = part.begin(); !part(); it = part.current()) {

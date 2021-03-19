@@ -12,35 +12,13 @@ namespace thp {
 
 // task queue interface
 struct task_queue {
-  virtual std::size_t pop(std::shared_ptr<executable>&) = 0;
-  virtual std::size_t pop_n(std::deque<std::shared_ptr<executable>>& out, std::size_t n = 1) = 0;
+  virtual std::size_t pop(std::unique_ptr<executable>&) = 0;
+  virtual std::size_t pop_n(std::deque<std::unique_ptr<executable>>& out, std::size_t n = 1) = 0;
   virtual std::size_t len() const = 0;
   virtual bool empty() const { return 0u == len(); }
   virtual ~task_queue() = default;
 };
 
-template <typename C>
-constexpr decltype(auto) to_value_type(C&& t)
-{
-  using T = std::remove_cvref_t<decltype(t)>;
-
-  if constexpr (traits::is_unique_ptr<T>::value)                 { return std::make_shared<T>(std::move(t)); }
-  else if constexpr (traits::is_shared_ptr<T>::value)            { return std::move(t); }
-  else if constexpr (traits::is_reference_wrapper<T>::value)     { return std::move(t.get()); }
-  else if constexpr (std::is_base_of_v<executable, T>)           { return std::make_shared<T>(std::move(t)); }
-  else if constexpr (traits::is_container<T>::value) {
-    using DataType = std::decay_t<typename T::value_type>;
-    using TaskType = traits::FindTaskType<DataType>::type;
-    std::vector<std::shared_ptr<TaskType>> tasks;
-    tasks.reserve(t.size());
-    std::ranges::transform(t, std::back_inserter(tasks),
-                           [&](auto&& x) { return to_value_type(x); });
-    return tasks;
-  }
-  else {
-    static_assert("type is not supported");
-  }
-}
 
 //
 // one executable container queue
@@ -48,7 +26,7 @@ constexpr decltype(auto) to_value_type(C&& t)
 //
 template<typename Prio, typename TaskComp = std::less<comparable_task<Prio>>>
 class priority_taskq : public task_queue {
-  using value_type = std::shared_ptr<comparable_task<Prio>>;
+  using value_type = std::unique_ptr<comparable_task<Prio>>;
 
   struct value_compare {
 	  constexpr decltype(auto) operator () (auto&& x, auto&& y) const
@@ -56,6 +34,28 @@ class priority_taskq : public task_queue {
 		  return TaskComp()(*x, *y);
 	  };
   };
+
+  template <typename C>
+  constexpr decltype(auto) to_value_type(C&& t)
+  {
+    using T = std::remove_cvref_t<decltype(t)>;
+
+    if constexpr (traits::is_unique_ptr<T>::value)                 { return std::move(t); }
+    else if constexpr (traits::is_reference_wrapper<T>::value)     { return std::move(t.get()); }
+    else if constexpr (std::is_base_of_v<executable, T>)           { return std::make_unique<T>(std::move(t)); }
+    else if constexpr (traits::is_container<T>::value) {
+      using DataType = std::decay_t<typename T::value_type>;
+      using TaskType = traits::FindTaskType<DataType>::type;
+      std::vector<std::unique_ptr<TaskType>> tasks;
+      tasks.reserve(t.size());
+      std::ranges::transform(t, std::back_inserter(tasks),
+                           [&](auto&& x) { return to_value_type(x); });
+      return tasks;
+    }
+    else {
+      static_assert("type is not supported");
+    }
+  }
 
 public:
   explicit priority_taskq()
@@ -80,7 +80,7 @@ public:
     return *this;
   }
 
-  std::size_t pop(std::shared_ptr<executable>& t) override {
+  std::size_t pop(std::unique_ptr<executable>& t) override {
     std::unique_lock l(mu);
     if (tasks.empty()) return 0;
 
@@ -96,7 +96,7 @@ public:
 	  return 1;
   }
 
-  std::size_t pop_n(std::deque<std::shared_ptr<executable>>& out, std::size_t n) {
+  std::size_t pop_n(std::deque<std::unique_ptr<executable>>& out, std::size_t n) {
     std::unique_lock l(mu);
     if (tasks.empty()) return 0;
 
@@ -130,7 +130,7 @@ public:
   virtual ~priority_taskq() = default;
 
 protected:
-  std::size_t _insert(std::shared_ptr<comparable_task<Prio>>&& p) {
+  std::size_t _insert(value_type&& p) {
     tasks.emplace_back(std::move(p));
     if constexpr (!std::is_same_v<void, Prio>) {
       std::ranges::push_heap(tasks, value_compare());
@@ -139,14 +139,14 @@ protected:
   }
 
   template<typename T>
-  std::size_t _insert(std::vector<std::shared_ptr<T>>&& c) {
+  std::size_t _insert(std::vector<T>&& c) {
     auto n = c.size();
     tasks.insert(tasks.end(), std::make_move_iterator(c.begin()), std::make_move_iterator(c.end()));
 
     if constexpr (!std::is_same_v<void, Prio>) {
       std::ranges::make_heap(tasks, value_compare());
     }
-    if (std::any_of(tasks.begin(), tasks.end(), [](auto&& p) { return p == nullptr; })) std::cerr << "gadbad" << std::endl;
+    //if (std::any_of(tasks.begin(), tasks.end(), [](auto&& p) { return p == nullptr; })) std::cerr << "gadbad" << std::endl;
     return n;
   }
 

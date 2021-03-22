@@ -86,6 +86,7 @@ auto check_prime(thp::threadpool* tp, const unsigned int n = 10*1000000) {
   cp.now();
   auto [ret] = tp->schedule(std::move(tasks));
   tp->drain();
+  //std::ranges::for_each(ret, [](auto&& f) { f.wait(); });
   cp.now();
   std::cerr << "time = " << cp.get_ms() << ", " << step << ", " << nts << std::endl;
   return std::move(ret);

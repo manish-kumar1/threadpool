@@ -42,7 +42,6 @@ public:
   : mu{}
   , wmtx{}
   , num_tasks{0}
-  , busy_workers{0}
   , scheduler{}
   , task_qs{create_taskqs_tuple(std::make_index_sequence<NumQs>{})}
   , all_qs{}
@@ -64,7 +63,7 @@ public:
   template <typename C>
   constexpr void insert_task(C&& t) {
     using TaskType = traits::FindTaskType<C>::type;
-    num_tasks += taskq_for<TaskType>().put(std::forward<C>(t));
+    num_tasks.fetch_add(taskq_for<TaskType>().put(std::forward<C>(t)), std::memory_order_acq_rel);
   }
 
   void close() {}
@@ -72,34 +71,27 @@ public:
 
   void drain() {
     cond_full.notify_all();
-    std::unique_lock l(wmtx);
-    cond_empty.wait(l, [this] { return (busy_workers == 0) && empty() && cur_output->empty() && old_output->empty(); });
+    std::unique_lock l(mu);
+    cond_empty.wait(l, [this] { return num_tasks.load(std::memory_order_relaxed) == 0; });
   }
 
   void notify_reschedule()      { sched_cond.notify_one(); }
 
   void schedule_fn(managed_stop_token st) {
-    statistics stats{std::chrono::system_clock::now(), {{all_qs, num_tasks.load(), -1}, {cur_output, 0}}, {16, 16} };
-    //unsigned last_num_tasks = 0u;
-    //auto cur_num_tasks = num_tasks.load();
-
+    statistics stats{std::chrono::system_clock::now(), {{all_qs, num_tasks.load(std::memory_order_acq_rel), -1}, {cur_output, 0}}, {16, 16} };
+    unsigned pending_tasks = 0u;
     for(;;) {
       thread_local bool ne = false;
       stats.jobq.out.reset();
       stats.jobq.out.cur_output = old_output;
       {
         std::unique_lock l(mu);
-        //auto x = std::chrono::high_resolution_clock::now();
         ne = sched_cond.wait(l, st, [&] {
-              //auto cur_num_tasks = num_tasks.load();
-              const auto need_schedule = (num_tasks > 0) || (!old_output->empty());
-              //std::cerr << std::this_thread::get_id() << " schedule_fn1: " << num_tasks.load() 
-              // << ", " << cur_num_tasks << ", " << need_schedule << ", " << old_output->size() << std::endl;
-              if (!need_schedule) cond_empty.notify_all();
-              return need_schedule;
+              pending_tasks = num_tasks.load(std::memory_order_acq_rel);
+              if (pending_tasks > 0)
+                scheduler.apply(stats);
+              return !old_output->empty();
             });
-        //auto y = std::chrono::high_resolution_clock::now();
-        //std::cerr << "scheduler_tick: " <<  std::chrono::duration<double, std::micro>(y-x).count() << std::endl;
         if (st.stop_requested()) break;
         if (st.pause_requested()) {
           l.unlock();
@@ -109,29 +101,19 @@ public:
       }
       if (ne)
       {
-        //  compute_stats(stats);
-        if (num_tasks > 0) {
-          scheduler.apply(stats);
-          num_tasks -= stats.jobq.out.new_tasks;
-        }
-        {
           std::unique_lock l(wmtx);
           if (cur_output->empty()) {
             std::swap(cur_output, old_output);
             stats.jobq.out.new_tasks = cur_output->size();
-            //num_tasks -= cur_output->size();
+            util::notify_cv(cond_full, stats.jobq.out.new_tasks);
           }
-        }
       }
 
-      //std::cerr << std::this_thread::get_id() << " schedule_fn2: " << num_tasks.load() << ", " << stats.jobq.out.new_tasks << ", " << ne << ", " << old_output->size() << ", " << stats.jobq.out.new_tasks << std::endl;
-      //if (stats.jobq.out.new_tasks) std::cerr << std::this_thread::get_id() << " notify cond_full: " << num_tasks.load() << ", " << stats.jobq.out.new_tasks << std::endl;
-      util::notify_cv(cond_full, stats.jobq.out.new_tasks);
+      //std::cerr << std::this_thread::get_id() << " schedule_fn2: " << pending_tasks << ", " << stats.jobq.out.new_tasks << ", " << ne << ", " << old_output->size() << ", " << stats.jobq.out.new_tasks << std::endl;
     }
   }
 
   void worker_fn(managed_stop_token st) {
-    //std::cerr << "worker_fn: " << st << std::endl;
     for(;;) {
       thread_local std::unique_ptr<executable> t{nullptr};
       {
@@ -155,16 +137,14 @@ public:
         t = std::move(cur_output->front());
         cur_output->pop_front();
       }
-      //std::cerr << std::this_thread::get_id() << " working" << std::endl;
 
-      ++busy_workers;
       t->execute();
-      --busy_workers;
-    }
-    //std::cerr << std::this_thread::get_id() << " done" << std::endl;
-  }
 
-  //~job_queue() = default;
+      num_tasks.fetch_sub(1, std::memory_order_acq_rel);
+      if (0 == num_tasks.load(std::memory_order_relaxed))
+        cond_empty.notify_all();
+    }
+  }
 
   template <typename C>
   constexpr decltype(auto) collect_future(C&& t)
@@ -190,8 +170,7 @@ public:
   }
 
   std::size_t size() const {
-    std::scoped_lock l(mu, wmtx);
-    return num_tasks + cur_output->size() + old_output->size();
+    return num_tasks.load(std::memory_order_relaxed);
   }
 
 protected:
@@ -224,11 +203,11 @@ protected:
 //    compute_algo_stats(stats.algo);
 //  }
 
-  inline bool empty() const { return num_tasks == 0u;   }
+//  inline bool empty() const { return num_tasks == 0u;   }
 
 private:
   mutable std::shared_mutex mu, wmtx;
-  std::atomic<unsigned> num_tasks, busy_workers;
+  std::atomic<unsigned> num_tasks;
   task_scheduler scheduler;
   // task queues for different task types
   TaskQueueTupleType task_qs;

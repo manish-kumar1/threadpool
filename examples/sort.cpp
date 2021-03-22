@@ -37,16 +37,16 @@ int main(int argc, const char* const argv[]) {
   try {
     std::random_device r;
     std::default_random_engine e(r());
-    std::uniform_int_distribution<int> dis(numeric_limits<int>::min()+1, numeric_limits<int>::max()-1);
-    //std::uniform_int_distribution<char> dis('a', 'z');
+    //std::uniform_int_distribution<int> dis(numeric_limits<int>::min()+1, numeric_limits<int>::max()-1);
+    std::uniform_int_distribution<char> dis('a', 'z');
 
+    thp::threadpool tp(workers);
     std::cerr << std::setw(14) << "size"
               << std::setw(14) << "time (ms)"
               << std::setw(14) << "is_sorted"
               << std::setw(14) << "stl(ms)" << std::endl;
     for(unsigned n = 10; n <= N; n *= 10) {
-      thp::threadpool tp(workers);
-      std::vector<int> data;
+      std::vector<char> data;
       data.reserve(n);
 
       std::generate_n(std::back_inserter(data), n, [&] { return dis(e); });

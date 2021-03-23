@@ -146,7 +146,6 @@ protected:
     if constexpr (!std::is_same_v<void, Prio>) {
       std::ranges::make_heap(tasks, value_compare());
     }
-    //if (std::any_of(tasks.begin(), tasks.end(), [](auto&& p) { return p == nullptr; })) std::cerr << "gadbad" << std::endl;
     return n;
   }
 

@@ -174,8 +174,6 @@ public:
     return e;
   }
 
-  auto num_workers() const { return max_threads_; }
-
   ~threadpool();
 
 protected:

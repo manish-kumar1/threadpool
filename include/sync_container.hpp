@@ -8,6 +8,7 @@
 #include <iterator>
 #include <shared_mutex>
 #include <vector>
+//#include <source_location>
 
 namespace thp {
 namespace details {
@@ -74,9 +75,12 @@ public:
   template<typename... Data>
   decltype(auto) put(Data&&... items) {
     //static_assert(std::is_same_v<T, std::decay_t<Data>> && ...);
-    std::lock_guard l(mu);
-    data.emplace_back(std::forward<Data>(items)...);
-    cur_size += sizeof...(Data);
+    {
+      std::lock_guard l(mu);
+      data.emplace_back(std::forward<Data>(items)...);
+      cur_size += sizeof...(Data);
+    }
+    cond.notify_all();
     return *this;
   }
 
@@ -88,7 +92,8 @@ public:
   T& operator[](size_t idx) {
     if (idx > buf_len) {
       std::ostringstream err;
-      err << idx << " > " << buf_len;
+      //auto& loc = std::source_location::current();
+      err << "sync_container.hpp" << ":" << 93 << " " << idx << " > " << buf_len;
       throw std::out_of_range(err.str());
     }
     return accept(idx);
@@ -97,7 +102,8 @@ public:
   const T& operator [](size_t idx) const {
     if (idx > buf_len) {
       std::ostringstream err;
-      err << idx << " > " << buf_len;
+      //auto& loc = std::source_location::current();
+      err << "sync_container.hpp" << ":" << 103 << " " << idx << " > " << buf_len;
       throw std::out_of_range(err.str());
     }
     return accept(idx);

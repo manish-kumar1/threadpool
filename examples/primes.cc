@@ -24,12 +24,12 @@ template<std::integral T>
 struct PrimeBits {
     explicit PrimeBits(T s, std::size_t knts)
     : start{s}
-    , off{}{
-      off.reserve(knts);
+    , total{0}
+    , bits(knts, true) {
     }
-    T start;
-    std::vector<uint16_t> off;
-    decltype(auto) size() { return off.size(); }
+    T start, total;
+    std::vector<bool> bits;
+    decltype(auto) size() { return total; }
 };
 
 bool is_prime(const unsigned n, const std::vector<unsigned>& factors, std::vector<unsigned>::const_iterator& re) {
@@ -56,67 +56,57 @@ bool is_prime(const unsigned n, const std::vector<unsigned>& factors, std::vecto
 
 template<std::integral T>
 PrimeBits<T> find_prime(const std::vector<T>& factors, const T start, const T end) {
-  //auto knts = std::ceil(0.070435*(end - start));
-  auto knts = std::ceil(1.25506f*(double(end)/std::log(end) - double(start)/std::log(start)));
-  PrimeBits<T> primes{start, 2<<16};
+  //auto knts = std::ceil(1.25506f*(double(end)/std::log(end) - double(start)/std::log(start)));
+  PrimeBits<T> primes{start, end-start};
 
-  std::vector<bool> bits(end-start, true);
+  const auto sq = static_cast<T>(1 + sqrt(end));
+  const auto re = std::ranges::lower_bound(factors, sq);
+  const auto fe = std::ranges::lower_bound(factors, (end-start)/2);
 
-  auto sq = static_cast<T>(1 + sqrt(end));
-  auto re = std::ranges::lower_bound(factors, sq);
-  auto fe = std::ranges::lower_bound(factors, (end-start)/2);
-  
-  auto fill_bits = [&](T p) {
+  auto completely_divides = [](const auto pp) { return [pp](auto x) { return pp%x == 0; }; };
+  auto fill_bits = [&](const T p) {
     //std::cerr << "fill_bits: " << p << ", " << start << ", " << end << std::endl;
-    T i = start;
-    if (start < p) {
-      i = 2*p;
-      bits[p-start] = true;
-    }
-    else if (start == p) {
-      bits[p-start] = true;
-      i = p+p;
-    }
-    else {
+    T i = p;
+    if (start > p) {
       auto d = start/p;
-      i = d*p + p;
+      i += d*p;
+    } else {
+      i += p;
+      primes.bits[p-start] = true;
     }
-      
+
     for (; i < end; i += p) {
-      bits[i-start] = false;
-  //    std::cerr << i << " = x" << std::endl;
+      primes.bits[i-start] = false;
     }
   };
 
   rng::for_each(factors.begin(), fe, fill_bits);
 
   for (T n = start; n < end; ++n) {
-    if (bits[n - start]) {
-      bool ret = true;
+    if (primes.bits[n - start]) {
+      bool yes = true;
       if (sq <= factors.back()) {
-        ret = std::ranges::none_of(factors.begin(), re, [n](unsigned x) { return n%x == 0; });
+        yes = std::ranges::none_of(factors.begin(), re, [n](auto&& x) { return n%x == 0; });
       }
       else
       {
-        if (std::ranges::none_of(factors, [n](unsigned x) { return n%x == 0; })) {
-          for (unsigned i = 2+factors.back(); i < sq; i += 2) {
+        if (std::ranges::none_of(factors, [n](auto&& x) { return n%x == 0; })) {
+          for (auto i = factors.back()+2; i < sq; i += 2) {
             if (n % i == 0) {
-              ret = false;
+              yes = false;
               break;
             }
           }
         }
         else
-          ret = false;
+          yes = false;
       }
-      if (ret) {
+      if (yes) {
         fill_bits(n);
-        bits[n - start] = true;
-        primes.off.push_back(static_cast<uint16_t>(n-start));
-      //  std::cerr << n << std::endl;
+        primes.bits[n - start] = true;
+        ++primes.total;
       } else {
-      //  std::cerr << n << " x" << std::endl;
-        bits[n - start] = false;
+        primes.bits[n - start] = false;
       }
     }
   }
@@ -124,22 +114,23 @@ PrimeBits<T> find_prime(const std::vector<T>& factors, const T start, const T en
   return primes;
 }
 
-auto seq_prime(unsigned int N) {
+template<std::integral T>
+auto seq_prime(const T N) {
     namespace rng = std::ranges;
-    std::vector<decltype(N)> prime_vec;
+    std::vector<T> prime_vec;
     prime_vec.reserve(0.070435*N);
 
-    auto completely_divides = [](const auto pp) { return [pp](auto x) { /*std::cerr << pp << "%" << x << " == " << pp%x << "\n"; */return pp%x == 0; }; };
+    auto completely_divides = [](const auto pp) { return [pp](auto x) { return pp%x == 0; }; };
     auto primes = [&] (auto n) {
         //std::cerr << std::addressof(prime_vec) << ", " << prime_vec.size() << std::endl;
-        auto factors = prime_vec | views::take_while([sq = static_cast<unsigned>(sqrt(n))+1](auto&& p) { return p < sq; });
+        auto factors = prime_vec | views::take_while([sq = static_cast<T>(sqrt(n))+1](auto&& p) { return p < sq; });
         auto yes = rng::none_of(factors , completely_divides(n));
         if (yes) prime_vec.push_back(n);
         return yes;
     };
     std::ostream ss(nullptr);
     auto prime_nums = views::iota(2u, N+1) | views::filter(primes);
-    rng::copy(prime_nums, std::ostream_iterator<decltype(N)>(ss, ""));
+    rng::copy(prime_nums, std::ostream_iterator<T>(ss, ""));
     //std::cerr << "prime nums: " << prime_vec.size() << std::endl;
     return prime_vec;
 }
@@ -220,29 +211,39 @@ decltype(auto) list_prime(thp::threadpool* tp, T n) {
 }
 #endif
 
-auto check_prime(thp::threadpool* tp, const unsigned int n = 10*1000000) {
-  std::vector<std::unique_ptr<simple_task<PrimeBits<unsigned>>>> tasks;
-  auto step = 65536u; //std::clamp(n/std::thread::hardware_concurrency(), 785000u, 785000u); //16*8*1024u, 16*8*1024u); //65536u, 65536u); //32*1024u, 256*10240u);
-  tasks.reserve(std::ceil(double(n)/step));
-  const auto sieve = seq_prime(step);
-  std::promise<PrimeBits<unsigned>> first;
-  PrimeBits<unsigned> nums(0, 2<<16);
+template<std::integral T>
+auto check_prime(thp::threadpool* tp, const T n = 10*1000000) {
+  T start_offset = 16*8*1024u;
+  T end_offset = 16*8*1024u;
+
+  std::vector<std::unique_ptr<simple_task<PrimeBits<T>>>> tasks;
+  auto step = std::clamp(n/std::thread::hardware_concurrency(), start_offset, end_offset); //65536u, 65536u); //32*1024u, 256*10240u); // 783500
+  tasks.reserve(std::ceil(n/step));
+
+  const auto sieve = seq_prime<T>(step);
+
+  std::promise<PrimeBits<T>> first;
+  PrimeBits<T> nums(0, step);
   nums.start = 0;
-  nums.off = std::vector<uint16_t>(sieve.begin(), sieve.end());
+  nums.total = sieve.size();
+  nums.bits.flip();
+  rng::for_each(sieve, [&](auto&& p) { nums.bits.at(p) = true; });
 
   first.set_value(std::move(nums));
 
-  for (unsigned int i = step; i < n; i += step) {
-      tasks.emplace_back(make_task(find_prime<unsigned>, sieve, std::forward<const unsigned>(i), std::forward<const unsigned>(std::min(i+step, n))));
+  for (T i = step; i < n; i += step) {
+      tasks.emplace_back(make_task(find_prime<T>, sieve, std::forward<const T>(i), std::forward<const T>(std::min(i+step, n))));
   }
 
   auto [ret] = tp->schedule(std::move(tasks));
-  std::vector<std::future<PrimeBits<unsigned>>> ans;
+
+  std::vector<std::future<PrimeBits<T>>> ans;
   ans.reserve(ret.size()+1);
+
   ans.emplace_back(first.get_future());
+
   rng::move(ret, std::back_inserter(ans));
 
-  //std::cerr << "time = " << cp.get_ms() << ", " << step << ", " << nts << std::endl;
   return std::move(ans);
 }
 
@@ -271,6 +272,11 @@ int main(int argc, const char* const argv[]) {
       auto&& v = f.get();
       num_primes += v.size();
       //std::cerr << "size: " << v.size() << std::endl;
+//      auto i = v.start;
+//      for(auto&& b : v.bits) {
+//        if (b) std::cerr << i << '\n';
+//        ++i;
+//      }
       //rng::transform(v.off, std::ostream_iterator<uint64_t>(std::cerr, "\n"), [&](auto&& o) { return v.start + o; });
       //std::cout << "---------" << std::endl;
          //std::copy_n(v.begin(), 10, std::ostream_iterator<unsigned>(std::cerr, "\n"));

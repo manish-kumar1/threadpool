@@ -18,11 +18,13 @@
 using namespace std;
 using namespace thp;
 using namespace chrono;
+namespace rng = std::ranges;
 
-template<std::size_t N>
+
 struct PrimeBits {
     uint64_t start;
-    std::bitset<N> bits;
+    std::vector<bool> bits;
+    decltype(auto) size() { return rng::count(bits, true); }
 };
 
 bool is_prime(const unsigned n, const std::vector<unsigned>& factors, std::vector<unsigned>::const_iterator& re) {
@@ -47,32 +49,51 @@ bool is_prime(const unsigned n, const std::vector<unsigned>& factors, std::vecto
   return ret;
 }
 
-auto find_prime(const std::vector<unsigned>& factors, unsigned s, unsigned e) {
-  std::vector<unsigned> primes;
-  primes.reserve(std::ceil(0.070435*(e-s)));
-  auto sq = static_cast<unsigned>(1 + sqrt(e));
+template<std::integral T>
+PrimeBits find_prime(const std::vector<T>& factors, const T start, const T end) {
+  //auto knts = std::ceil(0.070435*(end - start));
+  auto knts = std::ceil(1.25506f*(double(end)/std::log(end) - double(start)/std::log(start)));
+  PrimeBits primes{start, std::vector<bool>(end-start, true)};
+
+  auto sq = static_cast<T>(1 + sqrt(end));
   auto re = std::ranges::lower_bound(factors, sq);
-for (unsigned n = s; n < e; ++n) {
-  bool ret = true;
-  if (sq <= factors.back()) {
-    ret = std::ranges::none_of(factors.begin(), re, [n](unsigned x) { return n%x == 0; });
-  }
-  else
-  {
-    if (std::ranges::none_of(factors, [n](unsigned x) { return n%x == 0; })) {
-      for (unsigned i = 2+factors.back(); i < sq; i += 2) {
-        if (n % i == 0) {
-          ret = false;
-          break;
+  auto fe = std::ranges::lower_bound(factors, (end-start)/2);
+  
+  auto fill_bits = [&](T p) {
+    for (auto i = start%p; i < end - start; i += p)
+      primes.bits[i] = false;
+  };
+
+  rng::for_each(factors.begin(), fe, fill_bits);
+
+  for (T n = start; n < end; ++n) {
+    if (primes.bits[n - start]) {
+      bool ret = true;
+      if (sq <= factors.back()) {
+        ret = std::ranges::none_of(factors.begin(), re, [n](unsigned x) { return n%x == 0; });
+      }
+      else
+      {
+        if (std::ranges::none_of(factors, [n](unsigned x) { return n%x == 0; })) {
+          for (unsigned i = 2+factors.back(); i < sq; i += 2) {
+            if (n % i == 0) {
+              ret = false;
+              break;
+            }
+          }
         }
+        else
+          ret = false;
+      }
+      if (ret) {
+        primes.bits[n - start] = true;
+        fill_bits(n);
+      } else {
+        primes.bits[n - start] = false;
       }
     }
-    else
-      ret = false;
   }
-  if (ret) primes.push_back(n);
-}
-  //std::cerr << "[" << s << ", " << e << ") = " << primes.size() << std::endl;
+  //std::cerr << "[" << start << ", " << end << ") = " << primes.size() << ", "  << knts << ", " << (knts*16-(end-start)) << std::endl;
   return primes;
 }
 
@@ -173,23 +194,23 @@ decltype(auto) list_prime(thp::threadpool* tp, T n) {
 #endif
 
 auto check_prime(thp::threadpool* tp, const unsigned int n = 10*1000000) {
-  std::vector<std::unique_ptr<simple_task<std::vector<unsigned>>>> tasks;
-  auto step = std::clamp(n/std::thread::hardware_concurrency(), 32*1024u, 256*10240u);
+  std::vector<std::unique_ptr<simple_task<PrimeBits>>> tasks;
+  auto step = std::clamp(n/std::thread::hardware_concurrency(), 16*8*1024u, 16*8*1024u); //65536u, 65536u); //32*1024u, 256*10240u);
   tasks.reserve(std::ceil(double(n)/step));
   const auto sieve = seq_prime(step);
   for (unsigned int i = step; i < n; i += step) {
-      tasks.emplace_back(make_task(find_prime, std::cref(sieve), i, std::min(i+step, n)));
+      tasks.emplace_back(make_task(find_prime<unsigned>, sieve, std::forward<const unsigned>(i), std::forward<const unsigned>(std::min(i+step, n))));
   }
 
   auto [ret] = tp->schedule(std::move(tasks));
-  tp->drain();
+  //tp->drain();
   //std::ranges::for_each(ret, [](auto&& f) { f.wait(); });
   //std::cerr << "time = " << cp.get_ms() << ", " << step << ", " << nts << std::endl;
   return std::move(ret);
 }
 
 int main(int argc, const char* const argv[]) {
-  auto N = argc > 1 ? stoi(argv[1]) : 10*1000000;
+  auto N = argc > 1 ? stoull(argv[1]) : 10*1000000;
   util::clock_util<chrono::steady_clock> cp;
 
   auto save_rounding = std::fegetround();
@@ -212,7 +233,12 @@ int main(int argc, const char* const argv[]) {
     std::ranges::for_each(primes, [&](auto&& f) {
          auto&& v = f.get();
          num_primes += v.size();
-         //std::ranges::copy(v, std::ostream_iterator<unsigned>(std::cerr, "\n"));
+         //std::ranges::copy(v.bits, std::ostream_iterator<unsigned>(std::cerr, "\n"));
+//         int i = 0;
+//         for(auto&& b : v.bits) {
+//            if (b) cerr << v.start + i << '\n';
+//            ++i;
+//          }
          //std::copy_n(v.begin(), 10, std::ostream_iterator<unsigned>(std::cerr, "\n"));
     });
 //#endif    

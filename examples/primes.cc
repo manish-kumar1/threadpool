@@ -96,86 +96,96 @@ decltype(auto) list_prime(thp::threadpool* tp, T n) {
 }
 #endif
 
-template<std::integral T>
+template<std::integral T, std::size_t N>
 struct PrimeBits {
-    explicit PrimeBits(T s, T e)
+  T start, total;
+  std::bitset<N> bits;
+
+  template<typename V>
+  struct iterator {
+    V start;
+    std::size_t pos;
+    const std::bitset<N>& data;
+
+    constexpr explicit iterator(const std::bitset<N>& d, V s, std::size_t p = 0)
+    : start{s}
+    , pos{p}
+    , data{d}
+    {}
+
+    constexpr iterator& operator ++() { ++pos; return *this; }
+    constexpr iterator& operator++(std::size_t) { pos++; return *this; }
+    constexpr decltype(auto) operator * () { return data[pos]; }
+    friend bool operator == (iterator a, iterator b) {
+      return (a.pos == b.pos) && (std::addressof(a.data) == std::addressof(b.data)) && (a.start == b.start);
+    }
+  };
+
+public:
+    constexpr explicit PrimeBits(T s, T e)
     : start{s}
     , total{0}
-    , bits(e-s, true) {
-    }
-    T start;
-    T total;
-    std::vector<bool> bits;
-
-    decltype(auto) count() { return total; }
-
-    decltype(auto) print(std::ostream& oss, const std::string sep = "\n") {
-      auto i = start;
-      for(auto&& b : bits) {
-        if (b)
-          oss << i << sep.c_str();
-        ++i;
+    , bits()
+    {
+      bits.set();
+      while(e-s < N) {
+        bits.set(e-s, false);
+        ++e;
       }
-      return oss;
     }
 
-    decltype(auto) update_prime_bits(const T p) {
+    constexpr decltype(auto) count() const noexcept { return bits.count(); }
+
+    template<typename OIter>
+    constexpr decltype(auto) print(OIter iter) const {
+      auto val = views::iota(start, start+N) | views::filter([&](auto&& x) { return test(x-start); });
+      return rng::copy(val, iter);
+    }
+
+    constexpr decltype(auto) update_prime_bits(const T p) {
       //std::cout << "[" << start << " " << end << ") p = " << p << " x " << std::endl;
-      T i = start;
-      const T end = start+bits.size();
+      const T end = start+N;
+      T i = 2*p;
       if (start > p) {
-        if (start % p == 0)
-          i = start;
-        else
-          i = p*(1 + start/p);
+        i = (start % p == 0) ? start : p*(1 + start/p);
       }
-      else
-        i = 2*p;
 
-      for(; i < end; i += p)
-        bits[i-start] = false;
+      for(; i < end; i += p) {
+        bits.set(i-start, false);
+      }
     }
+
+    constexpr decltype(auto) set(std::size_t pos)        { return bits.set(pos);  }
+    constexpr decltype(auto) test(std::size_t pos) const { return bits.test(pos); }
 };
 
-template<std::integral T>
-PrimeBits<T> find_prime(const std::vector<T>& small_primes, const T start, const T end) {
+template<std::integral T, std::size_t N>
+constexpr PrimeBits<T, N> find_prime(const std::vector<T>& small_primes, const T start, const T end) {
   //auto knts = std::ceil(1.25506f*(double(end)/std::log(end) - double(start)/std::log(start)));
-  PrimeBits<T> primes{start, end};
+
+  PrimeBits<T, N> primes{start, end};
 
   const auto sq = static_cast<T>(1 + sqrt(end));
   auto completely_divides = [](const auto pp) { return [pp](auto x) { return pp%x == 0; }; };
   auto less_than = [](const auto pp) { return [pp] (auto x) { return x < pp; }; };
-  auto non_prime_bits = [&] (auto&& s) { return [s,&primes] (auto&& n) { return primes.bits[n - s]; }; };
-  auto new_primes = [&](auto&& n) {
-    auto divides = completely_divides(n);
-    auto factors = small_primes | views::take_while(less_than(sq));
-    bool yes = rng::none_of(factors, divides);
-    if (sq > small_primes.back()) {
-      for(auto i = small_primes.back()+2; i < sq; i += 2)
-        if (divides(i)) {
-          yes = false;
-          break;
-        }
-      }
-    return yes;
-  };
+  auto non_prime_bits = [&] (auto&& s) { return [s,&primes] (auto&& n) { return primes.test(n - s); }; };
   auto update_prime_bits = [&](auto&& x) {
     primes.update_prime_bits(x);
-    return primes.bits[x-start];
+    return primes.test(x-start);
   };
 
   auto all_primes_bits = views::iota(start, end) | views::filter(non_prime_bits(start)) | views::transform(update_prime_bits);
 
+  // find primes for first segment
   rng::for_each(small_primes | views::take_while(less_than(sq)), [&](auto&& p) { primes.update_prime_bits(p); });
   primes.total = rng::count(all_primes_bits, true);
 
-  if (primes.total != primes.count()) std::cerr << "bug " << primes.total << " != " << primes.count() << std::endl;
   //std::cerr << "[" << start << ", " << end << ") = " << primes.size() << ", "  << sq << ", " << (primes.size()*16) << ", " << (end-start) << std::endl;
   return primes;
 }
 
 template<std::integral T>
-auto seq_prime(const T N) {
+constexpr auto seq_prime(const T N) {
     namespace rng = std::ranges;
     std::vector<T> prime_vec;
 
@@ -192,31 +202,29 @@ auto seq_prime(const T N) {
 
 template<std::integral T>
 auto check_prime(thp::threadpool* tp, const T n = 10*1000000) {
-  T start_offset = 16*8*1024u;
-  T end_offset = 16*8*1024u;
-
-  std::vector<std::unique_ptr<simple_task<PrimeBits<T>>>> tasks;
-  auto step = std::clamp(n/std::thread::hardware_concurrency(), start_offset, end_offset); //65536u, 65536u); //32*1024u, 256*10240u); // 783500
+  constexpr const T start_offset = 16*8*1024u;
+  constexpr const T end_offset = 16*8*1024u;
+  constexpr const size_t N = start_offset;
+  std::vector<std::unique_ptr<simple_task<PrimeBits<T, N>>>> tasks;
+  auto step = N; 
   tasks.reserve(std::ceil(n/step));
 
   const auto sieve = seq_prime<T>(step);
 
-  std::promise<PrimeBits<T>> first;
-  PrimeBits<T> nums(0, step);
-  nums.start = 0;
-  nums.total = sieve.size();
+  std::promise<PrimeBits<T, N>> first;
+  PrimeBits<T, N> nums(0, step);
   nums.bits.flip();
-  rng::for_each(sieve, [&](auto&& p) { nums.bits.at(p) = true; });
+  rng::for_each(sieve, [&](auto&& p) { nums.set(p); });
 
   first.set_value(std::move(nums));
 
   for (T i = step; i < n; i += step) {
-      tasks.emplace_back(make_task(find_prime<T>, sieve, std::forward<const T>(i), std::forward<const T>(std::min(i+step, n))));
+      tasks.emplace_back(make_task(find_prime<T, N>, sieve, std::forward<const T>(i), std::forward<const T>(std::min(i+step, n))));
   }
 
   auto [ret] = tp->schedule(std::move(tasks));
 
-  std::vector<std::future<PrimeBits<T>>> ans;
+  std::vector<std::future<PrimeBits<T, N>>> ans;
   ans.reserve(ret.size()+1);
 
   ans.emplace_back(first.get_future());
@@ -226,7 +234,7 @@ auto check_prime(thp::threadpool* tp, const T n = 10*1000000) {
 }
 
 int main(int argc, const char* const argv[]) {
-  auto N = argc > 1 ? stoull(argv[1]) : 10*1000000;
+  auto N = argc > 1 ? stoull(argv[1]) : 10*1000000u;
   util::clock_util<chrono::steady_clock> cp;
 
   auto save_rounding = std::fegetround();
@@ -248,7 +256,7 @@ int main(int argc, const char* const argv[]) {
     std::ranges::for_each(primes, [&](auto&& f) {
       auto&& v = f.get();
       num_primes += v.count();
-      //v.print(std::cerr);
+      //v.print(std::ostream_iterator<decltype(N)>(std::cerr, "\n"));
     });
     std::cerr << "total primes: (" << N << ") : " << num_primes << std::endl;
     std::cerr << "thp: " << cp.get_ms() << " ms" << std::endl;

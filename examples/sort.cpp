@@ -30,6 +30,7 @@ int main(int argc, const char* const argv[]) {
   auto workers = argc > 2 ? stoi(argv[2]) : std::thread::hardware_concurrency();
   bool use_stl = argc > 3 ? true : false;
 
+  std::ios::sync_with_stdio(false);
   std::locale l("");
   std::locale::global(l);
   std::cerr.imbue(l);

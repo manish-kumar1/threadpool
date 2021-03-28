@@ -144,14 +144,14 @@ public:
 
     constexpr decltype(auto) update_prime_bits(const T p) {
       //std::cout << "[" << start << " " << end << ") p = " << p << " x " << std::endl;
-      const T end = start+N;
       T i = 2*p;
       if (start > p) {
         i = (start % p == 0) ? start : p*(1 + start/p);
       }
 
-      for(; i < end; i += p) {
-        bits.set(i-start, false);
+      for(auto j = i-start; j < N; j += p) {
+        //bits.set(j, false);
+        bits[j] = false;
       }
     }
 
@@ -188,12 +188,12 @@ template<std::integral T>
 constexpr auto seq_prime(const T N) {
     namespace rng = std::ranges;
     std::vector<T> prime_vec;
+    //prime_vec.reserve(std::ceil((1.25506f*N)/std::log(N)));
 
     auto completely_divides = [](const auto pp) { return [pp](auto x) { return pp%x == 0; }; };
     auto primes = [&] (const T n) {
         auto factors = prime_vec | views::take_while([sq = static_cast<T>(sqrt(n))+1](auto&& p) { return p < sq; });
-        auto yes = rng::none_of(factors , completely_divides(n));
-        return yes;
+        return rng::none_of(factors , completely_divides(n));
     };
     auto prime_nums = views::iota(2u, N+1) | views::filter(primes);
     rng::copy(prime_nums, std::back_inserter(prime_vec));
@@ -205,7 +205,7 @@ auto check_prime(thp::threadpool* tp, const T n = 10*1000000) {
   constexpr const T start_offset = 16*8*1024u;
   constexpr const T end_offset = 16*8*1024u;
   constexpr const size_t N = start_offset;
-  std::vector<std::unique_ptr<simple_task<PrimeBits<T, N>>>> tasks;
+  std::vector<simple_task<PrimeBits<T, N>>> tasks;
   auto step = N; 
   tasks.reserve(std::ceil(n/step));
 
@@ -237,12 +237,15 @@ int main(int argc, const char* const argv[]) {
   auto N = argc > 1 ? stoull(argv[1]) : 10*1000000u;
   util::clock_util<chrono::steady_clock> cp;
 
+  std::ios::sync_with_stdio(false);
+  std::ostream& oss = std::cout;
+
   auto save_rounding = std::fegetround();
   std::fesetround(FE_UPWARD);
 
   auto lcl = std::locale("");
-  //std::locale::global(lcl);
-  //std::cerr.imbue(lcl); 
+//  std::locale::global(lcl);
+//  oss.imbue(lcl); 
  
   try {
     thp::threadpool tp;
@@ -250,20 +253,20 @@ int main(int argc, const char* const argv[]) {
     auto primes = check_prime(&tp, N);
     //auto primes = seq_prime(N);
     //auto tot = list_prime(&tp, N);
-    cp.now();
 
     unsigned num_primes = 0;
     std::ranges::for_each(primes, [&](auto&& f) {
       auto&& v = f.get();
       num_primes += v.count();
-      //v.print(std::ostream_iterator<decltype(N)>(std::cerr, "\n"));
+      v.print(std::ostream_iterator<decltype(N)>(oss, "\n"));
     });
-    std::cerr << "total primes: (" << N << ") : " << num_primes << std::endl;
-    std::cerr << "thp: " << cp.get_ms() << " ms" << std::endl;
+    cp.now();
+    oss << "total primes: (" << N << ") : " << num_primes << std::endl;
+    oss << "thp: " << cp.get_ms() << " ms" << std::endl;
   } catch (exception &ex) {
-    cerr << "main: Exception: " << ex.what() << endl;
+    oss << "main: Exception: " << ex.what() << endl;
   } catch (...) {
-    cerr << "Exception: " << endl;
+    oss << "Exception: " << endl;
   }
 
   std::fesetround(save_rounding);

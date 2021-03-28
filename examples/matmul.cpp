@@ -52,7 +52,7 @@ decltype(auto) matmul_tp(const Matrix& mat1,
       }
     };
 
-    std::vector<std::unique_ptr<thp::simple_task<void>>> tasks;
+    std::vector<thp::simple_task<void>> tasks;
     for (auto c = cs; c < ce; ++c)
       for(size_t i = 0; i < n; i += step) {
         auto col_vec = std::make_shared<std::vector<Val>>(n, 0);

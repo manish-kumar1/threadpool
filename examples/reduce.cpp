@@ -16,7 +16,7 @@
 decltype(auto) reduce_min(const std::vector<int>& data, thp::threadpool& tp) {
   using pf = thp::part_algo<decltype(data.begin())>;
   pf algo(data.begin(), data.end());
-  algo.step = std::clamp(static_cast<unsigned>(data.size()/tp.num_workers()), 100000u, 25000000u); //250000; // tune it for your data size
+  algo.step = std::clamp(static_cast<unsigned>(data.size()/std::thread::hardware_concurrency()), 100000u, 25000000u); //250000; // tune it for your data size
   if (algo.step == 0) algo.step = 1;
 
   auto [f] = tp.reduce(data.begin(), data.end(),
@@ -33,8 +33,8 @@ int main(int argc, const char* const argv[])
   // Initialize Google's logging library.
   //google::InitGoogleLogging(argv[0]);
   
-  const unsigned n = argc > 1 ? std::stoi(argv[1]) : 40*1000000; // 40 million
-  bool use_stl = false;
+  const unsigned n = argc > 1 ? std::stoi(argv[1]) : 10*1000000; // 10 million
+  bool use_stl = argc > 2;;
 
   std::locale::global(std::locale(""));
   std::cerr.imbue(std::locale(""));

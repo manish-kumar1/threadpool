@@ -105,7 +105,7 @@ int main(int argc, const char* const argv[])
   priority_task<unsigned, int> p1(factorial, 10); p1.set_priority(-42);
 //  auto x = priority_task<int>(factorial, 10).priority(-42).run_on(cpu1).after(p0).before(p3).for(3s);
 //  auto x = priority_task<int>(factorial, 10).priority(-42).with_config(conf)
-  auto p2 = make_task<float>(factorial, 20); p2->set_priority(25.5f);
+  auto p2 = make_task<float>(factorial, 20); p2.set_priority(25.5f);
   auto p3 = make_task(check_prime, 100, std::ref(tp));
 
   //std::list<simple_task<unsigned>> p4; // debug why list, deque crashes
@@ -121,7 +121,7 @@ int main(int argc, const char* const argv[])
 
   tp.drain();
 
-  auto p7 = make_task<system_clock::time_point>(check_prime, 1024, std::ref(tp)); p7->set_priority(system_clock::now()+5s);
+  auto p7 = make_task<system_clock::time_point>(check_prime, 1024, std::ref(tp)); p7.set_priority(system_clock::now()+5s);
   auto [f7] = tp.schedule(p7);
   print_primes(f7);
 

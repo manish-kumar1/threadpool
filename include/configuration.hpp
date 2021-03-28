@@ -25,7 +25,7 @@ struct configuration {
   virtual configuration &unblock_signals(std::vector<int> sig) = 0;
 
   virtual const sigset_t *get_sigset() const = 0;
-  virtual ~configuration() {}
+  virtual ~configuration() = default;
 };
 
 namespace platform {
@@ -54,13 +54,13 @@ private:
 } // namespace platform
 
 namespace Static {
-  constexpr inline const decltype(auto) shutdown_grace_period()    { return std::chrono::milliseconds(2000);}
+  constexpr inline const decltype(auto) shutdown_grace_period()    { return std::chrono::milliseconds(2000); }
   constexpr inline const decltype(auto) stats_collection_period()  { return std::chrono::milliseconds(1000); }
-  constexpr inline const decltype(auto) schedule_request_timeout() { return std::chrono::milliseconds(10); }
-  constexpr inline const decltype(auto) scheduler_tick()           { return std::chrono::microseconds(60);  }
-  constexpr inline const decltype(auto) per_queue_capacity()       { return 16*1024;                        }
-  constexpr inline const decltype(auto) queue_table_capacity()     { return 1024;                           }
-  constexpr inline const decltype(auto) stl_sort_cutoff()          { return 1000000u;                       }
+  constexpr inline const decltype(auto) schedule_request_timeout() { return std::chrono::milliseconds(10);   }
+  constexpr inline const decltype(auto) scheduler_tick()           { return std::chrono::microseconds(60);   }
+  constexpr inline const decltype(auto) per_queue_capacity()       { return 16*1024;                         }
+  constexpr inline const decltype(auto) queue_table_capacity()     { return 1024;                            }
+  constexpr inline const decltype(auto) stl_sort_cutoff()          { return 1000000u;                        }
 } // namespace Static
 
 } // namespace thp

@@ -84,7 +84,7 @@ public:
             return std::make_tuple(s1, e2);
           };
 
-          std::vector<std::unique_ptr<simple_task<std::tuple<I, S>>>> merge_tasks;
+          std::vector<simple_task<std::tuple<I, S>>> merge_tasks;
           const auto n = fut_vec.size();
           merge_tasks.reserve(n % 2 != 0 ? (1 + n/2) : n/2);
 
@@ -103,7 +103,7 @@ public:
 
         unsigned part_len = static_cast<unsigned>(len/std::thread::hardware_concurrency());
         auto step = std::clamp(part_len, 2u, Static::stl_sort_cutoff());
-        std::vector<std::unique_ptr<simple_task<std::tuple<I, S>>>> tasks;
+        std::vector<simple_task<std::tuple<I, S>>> tasks;
         tasks.reserve(std::ceil(len/step));
         for(std::size_t i = 0; i < len; i += step)
           tasks.emplace_back(make_task(tp_sort, s+i, s+std::min(i+step, len), comp, proj));
@@ -149,7 +149,7 @@ public:
       return std::transform_reduce(s1, e1, init, rdc_fn, tr_fn);
     };
 
-    std::vector<std::unique_ptr<simple_task<T>>> tasks;
+    std::vector<simple_task<T>> tasks;
     tasks.reserve(part.count());
 
     for (auto it = part.begin(); !part(); it = part.current()) {
@@ -164,14 +164,9 @@ public:
     });
   }
 
-  std::size_t size() const {
-    return jobq_.size();
-  }
-
-  template<typename InputIter, typename Fn>
-  decltype(auto) for_each(InputIter s, InputIter e, Fn fn) {
-    std::for_each(s, e, [&](auto&& x) { enqueue(fn, x); });
-    return e;
+  template<std::input_iterator I, std::sentinel_for<I> S, typename Fn>
+  decltype(auto) for_each(I s, S e, Fn fn) {
+    return std::ranges::for_each(s, e, [&](auto&& x) { enqueue(fn, x); });
   }
 
   ~threadpool();

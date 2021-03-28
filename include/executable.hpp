@@ -4,6 +4,7 @@
 namespace thp {
 
 // task interface
+// rule of zero
 struct executable {
   virtual void execute() = 0;
   virtual std::ostream& info(std::ostream& oss) {

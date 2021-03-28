@@ -35,7 +35,7 @@ public:
     Base::set_priority(Clock::now());
   }
 
-  constexpr decltype(auto) at(TimePoint&& tp) {
+  constexpr decltype(auto) start_at(TimePoint&& tp) {
     Base::set_priority(std::forward<TimePoint>(tp));
     return *this;
   }

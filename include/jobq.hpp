@@ -63,7 +63,8 @@ public:
   template <typename C>
   constexpr void insert_task(C&& t) {
     using TaskType = traits::FindTaskType<C>::type;
-    num_tasks.fetch_add(taskq_for<TaskType>().put(std::forward<C>(t)), std::memory_order_acq_rel);
+    const auto n = taskq_for<TaskType>().put(std::forward<C>(t));
+    num_tasks.fetch_add(n, std::memory_order_acq_rel);
   }
 
   void close() {}

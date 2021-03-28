@@ -58,20 +58,23 @@ class priority_taskq : public task_queue {
   }
 
 public:
-  explicit priority_taskq()
+  constexpr explicit priority_taskq()
   : mu{}
   , tasks{}
   {}
 
-  priority_taskq(priority_taskq&& rhs)
+  priority_taskq(const priority_taskq&) = delete;
+  priority_taskq& operator = (const priority_taskq&) = delete;
+
+  priority_taskq(priority_taskq&& rhs) noexcept
   : mu{}
   , tasks{}
   {
     std::lock_guard lk(rhs.mu);
-    tasks = std::move(rhs.tasks);
+    std::swap(tasks, rhs.tasks);
   }
 
-  priority_taskq& operator=(priority_taskq&& rhs) {
+  priority_taskq& operator=(priority_taskq&& rhs) noexcept {
     std::unique_lock lk(mu, std::defer_lock), rhs_lk(rhs.mu, std::defer_lock);
     std::lock(lk, rhs_lk);
     if (this != &rhs) {
@@ -127,7 +130,10 @@ public:
     return tasks.size();
   }
 
-  virtual ~priority_taskq() = default;
+  virtual ~priority_taskq() noexcept {
+    std::unique_lock l(mu);
+    tasks.clear();
+  }
 
 protected:
   std::size_t _insert(value_type&& p) {

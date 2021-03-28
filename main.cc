@@ -4,18 +4,18 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <glog/stl_logging.h>
-#include "include/spdlog/spdlog.h"
+
+#include "spdlog/spdlog.h"
 
 #include "include/threadpool.hpp"
 
 int main(int argc, const char* const argv[])
 {
   // Initialize Google's logging library.
-  //google::InitGoogleLogging(argv[0]);
   //LOG(INFO) << "Hello from threadpool!";
 
   spdlog::info("hello from threadpool");
-  
+
   thp::threadpool tp;
 
   tp.enqueue([] { std::cerr << "Hello world" << std::endl; });

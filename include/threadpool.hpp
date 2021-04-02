@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cassert>
 
+#include "include/partitioner.hpp"
 #include "include/util.hpp"
 #include "include/jobq.hpp"
 #include "include/scheduler.hpp"
@@ -127,11 +128,11 @@ public:
     std::input_iterator I, std::sentinel_for<I> S,
     typename T,
     typename BinaryOp,
-    typename Partitioner
+    typename PartAlgo = EqualSizePartAlgo<I,S>
   >
   requires std::movable<T>
-  decltype(auto) reduce(I s, S e, T init, BinaryOp rdc_fn, Partitioner part) {
-    return transform_reduce(s, e, std::move(init), rdc_fn, std::identity(), part);
+  decltype(auto) reduce(I s, S e, T init, BinaryOp rdc_fn, PartAlgo part_algo) {
+    return transform_reduce(s, e, std::move(init), rdc_fn, std::identity(), part_algo);
   }
 
   template <
@@ -139,26 +140,25 @@ public:
     typename T,
     typename BinaryOp,
     typename UnaryOp,
-    typename Partitioner
+    typename PartAlgo = EqualSizePartAlgo<I,S>
   >
   requires std::movable<T>
   decltype(auto) transform_reduce(I s, S e, T init,
                                   BinaryOp rdc_fn, UnaryOp tr_fn,
-                                  Partitioner part) {
-    auto transform_reduce_fn = [=](auto &&s1, auto &&e1) {
-      return std::transform_reduce(s1, e1, init, rdc_fn, tr_fn);
+                                  PartAlgo part_algo) {
+    auto transform_reduce_fn = [=](auto&& subrng) {
+      return std::transform_reduce(subrng.begin(), subrng.end(), init, rdc_fn, tr_fn);
     };
 
-    std::vector<simple_task<T>> tasks;
-    tasks.reserve(part.count());
+    return enqueue([=, this] () mutable {
+      std::vector<simple_task<T>> tasks;
+      partitioner<PartAlgo> partitions(std::make_shared<PartAlgo>(part_algo));
+      tasks.reserve(partitions.count());
 
-    for (auto it = part.begin(); !part(); it = part.current()) {
-      tasks.emplace_back(make_task(transform_reduce_fn, it, part.next()));
-    }
+      //std::for_each(partitions.begin(), partitions.end(), [&](auto&& subrng) { tasks.emplace_back(make_task(transform_reduce_fn, subrng)); });
+      for(auto&& sr : partitions) tasks.emplace_back(make_task(transform_reduce_fn, sr));
 
-    auto f = jobq_.schedule_task(std::move(tasks));
-
-    return enqueue([&, futs = std::move(f)] () mutable {
+      auto futs = jobq_.schedule_task(std::move(tasks));
       return std::transform_reduce(futs.begin(), futs.end(), init, rdc_fn,
                                    [](auto&& fut) mutable { return std::move(fut.get()); });
     });

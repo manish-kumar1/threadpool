@@ -12,17 +12,18 @@
 #include "include/partitioner.hpp"
 #include "include/clock_util.hpp"
 
+template<typename Data>
+decltype(auto) reduce_min(const Data& data, thp::threadpool& tp) {
+  //using pf = thp::part_algo<decltype(data.begin())>;
+  std::size_t step = std::clamp(static_cast<unsigned>(data.size()/std::thread::hardware_concurrency()), 100000u, 25000000u); //250000; // tune it for your data size
+  if (step == 0) step = 1;
 
-decltype(auto) reduce_min(const std::vector<int>& data, thp::threadpool& tp) {
-  using pf = thp::part_algo<decltype(data.begin())>;
-  pf algo(data.begin(), data.end());
-  algo.step = std::clamp(static_cast<unsigned>(data.size()/std::thread::hardware_concurrency()), 100000u, 25000000u); //250000; // tune it for your data size
-  if (algo.step == 0) algo.step = 1;
+  thp::EqualSizePartAlgo algo(data.cbegin(), data.cend(), step);
 
-  auto [f] = tp.reduce(data.begin(), data.end(),
+  auto [f] = tp.reduce(data.cbegin(), data.cend(),
                        std::numeric_limits<int>::max(),  // T
                        [](auto&& a, auto&& b) { return std::min(a, b); }, // Binary op
-                       thp::partitioner(data.begin(), data.end(), algo) // partitioner
+                       algo // partitioner
                      );
 
   return f.get();    

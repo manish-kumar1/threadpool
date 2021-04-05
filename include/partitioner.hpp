@@ -77,19 +77,27 @@ class EqualSizePartAlgo : public partition_algo<I,S> {
 public:
   using state_t = typename partition_algo<I,S>::state_t;
 
-  constexpr explicit EqualSizePartAlgo(I s, S e, typename std::iter_difference_t<I> part_len)
+  constexpr explicit EqualSizePartAlgo(I s, S e, std::size_t counts)
   : partition_algo<I,S>{}
   , original(s, e)
-  , partition_size{std::min(part_len, std::ranges::distance(s, e))}
-  , partition_count{partition_size == 0 ? 0 : std::ranges::distance(s,e)/partition_size}
   {
+    auto len = std::ranges::distance(s, e);
+    counts = len <= counts ? len : counts;
+    if (len%counts == 0u) {
+      partition_size = len/counts;
+      partition_count = counts;
+    } else {
+      partition_size = len/counts;
+      partition_count = counts+1;
+    }
     //std::cerr << "dis = " << std::ranges::distance(s, e) << std::endl;
   }
 
   constexpr virtual std::size_t count() const override { return partition_count; }
 
   constexpr virtual state_t next_step(const state_t& prev) override {
-    if (prev.end == original.end) return state_t(original.end, original.end);
+    if (prev.end == original.end)
+      return state_t(original.end, original.end);
 
     auto dis = std::ranges::distance(prev.end, original.end);
     if (dis > partition_size)

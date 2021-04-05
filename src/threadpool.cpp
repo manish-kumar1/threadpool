@@ -88,8 +88,8 @@ void threadpool::pause() {
 }
 
 void threadpool::resume() {
-  worker_pool_.resume();
   managers_.resume();
+  worker_pool_.resume();
 }
 
 void threadpool::stop() {

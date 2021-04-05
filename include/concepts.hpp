@@ -4,7 +4,7 @@
 #include <chrono>
 
 #include "include/executable.hpp"
-//#include "include/traits.hpp"
+#include "include/traits.hpp"
 
 namespace thp {
 namespace kncpt {
@@ -24,7 +24,7 @@ concept PriorityTask = SimpleTask<T> &&
   };
 
 template<typename T>
-concept ThreadPoolTask = PriorityTask<T>  || SimpleTask<T>;
+concept ThreadPoolTask = PriorityTask<typename traits::FindTaskType<T>::type> || SimpleTask<typename traits::FindTaskType<T>::type>;
 
 } // namespace kncpt
 } // namespace thp

@@ -24,6 +24,7 @@
 #include "include/worker_pool.hpp"
 #include "include/task_factory.hpp"
 #include "include/all_priority_types.hpp"
+#include "include/concepts.hpp"
 
 namespace thp {
 
@@ -44,11 +45,8 @@ public:
   void shutdown();
 
   // could be heterogeneous task types
-  template <typename... Args>
-  constexpr decltype(auto) schedule(Args&&... args) {
-    auto futs = std::make_tuple(jobq_.schedule_task(args)...);
-    jobq_.notify_reschedule();
-    return futs;
+  constexpr decltype(auto) schedule(kncpt::ThreadPoolTask auto&&... args) {
+    return std::make_tuple(jobq_.schedule_task(args)...);
   }
 
   template <typename Clock> 

@@ -71,7 +71,7 @@ public:
   void stop() {}
 
   void drain() {
-    cond_full.notify_all();
+    //cond_full.notify_all();
     std::unique_lock l(mu);
     cond_empty.wait(l, [this] { return num_tasks.load(std::memory_order_relaxed) == 0; });
   }

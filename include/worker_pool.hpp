@@ -3,7 +3,7 @@
 
 #include <algorithm>
 #include <mutex>
-#include <vector>
+#include <unordered_map>
 #include <type_traits>
 
 #include "include/configuration.hpp"
@@ -24,15 +24,15 @@ public:
   void start_n_thread(N n, Fn&& fn, Args&&... args) {
     static_assert(std::is_invocable_v<Fn, Args..., managed_stop_token>, "function signature mismatch");
     std::unique_lock l(mu_);
-    for(size_t i = 0; i < n; ++i)
-      create(std::forward<Fn>(fn), std::forward<Args>(args)...);
+    std::generate_n(std::inserter(workers_, workers_.begin()), n, [&] {
+      return create(std::forward<Fn>(fn), std::forward<Args>(args)...); 
+    });
   }
 
   template<typename Fn, typename... Args>
   decltype(auto) start_thread(Fn&& fn, Args&&... args) {
     static_assert(std::is_invocable_v<Fn, Args..., managed_stop_token>, "function signature mismatch");
-    std::unique_lock l(mu_);
-    return create(std::forward<Fn>(fn), std::forward<Args>(args)...);
+    start_n_thread(1, std::forward<Fn>(fn), std::forward<Args>(args)...);
   }
 
   decltype(auto) size() const {
@@ -50,9 +50,9 @@ public:
   void resume() { stop_src_->request_resume(); }
 
   void shutdown() {
+    using pair = std::decay_t<decltype(workers_)>::value_type;
     if (stop_src_->request_stop())
-      for(auto& t : workers_)
-        t.second.join();
+      std::ranges::for_each(workers_, &platform::thread::join, &pair::second);
   }
 
   ~worker_pool() {
@@ -63,8 +63,7 @@ protected:
   template<typename Fn, typename... Args>
   decltype(auto) create(Fn&& fn, Args&&... args) {
     platform::thread t(stop_src_, std::forward<Fn>(fn), std::forward<Args>(args)..., stop_src_->get_managed_token());
-    auto p = workers_.emplace(std::make_pair(t.get_id(), std::move(t)));
-    return p.first->first;
+    return std::make_pair(t.get_id(), std::move(t));
   }
 
 private:

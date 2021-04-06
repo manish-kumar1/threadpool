@@ -4,7 +4,7 @@
 #include <memory>
 #include <unordered_map>
 
-#include "include/algos/schedule_algos.hpp"
+#include "include/algos/scheduling/schedule_algos.hpp"
 #include "include/statistics.hpp"
 #include "include/managed_stop_token.hpp"
 

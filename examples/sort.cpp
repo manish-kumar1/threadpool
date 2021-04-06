@@ -37,7 +37,7 @@ int main(int argc, const char* const argv[]) {
 
   try {
     std::random_device r;
-    std::default_random_engine e(r());
+    std::mt19937_64 e(r());
     //std::uniform_int_distribution<int> dis(numeric_limits<int>::min()+1, numeric_limits<int>::max()-1);
     std::uniform_int_distribution<char> dis('a', 'z');
 

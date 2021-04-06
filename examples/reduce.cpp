@@ -14,9 +14,9 @@
 
 template<typename Data>
 decltype(auto) reduce_min(const Data& data, thp::threadpool& tp) {
-  std::size_t step = std::clamp(static_cast<unsigned>(data.size()/std::thread::hardware_concurrency()), 100000u, 2500000u); //250000; // tune it for your data size
+  //std::size_t step = std::clamp(static_cast<unsigned>(data.size()/std::thread::hardware_concurrency()), 100000u, 2500000u); //250000; // tune it for your data size
   std::size_t num_partitions = std::clamp(data.size()/100000u, std::size_t(1), data.size());
-  thp::EqualSizePartAlgo algo(data.cbegin(), data.cend(), num_partitions);
+  thp::partition::EqualSize algo(data.cbegin(), data.cend(), num_partitions);
 
   auto [f] = tp.reduce(data.cbegin(), data.cend(),
                        std::numeric_limits<int>::max(),  // T

@@ -119,14 +119,12 @@ int main(int argc, const char* const argv[])
     {
       thp::threadpool tp;
       cu.now();
-      using pf = thp::part_algo<decltype(file_paths.begin())>;
-      pf algo(file_paths.begin(), file_paths.end());
-      algo.step = 1; //std::distance(file_paths.begin(), file_paths.end())/std::thread::hardware_concurrency();
+      thp::partition::EqualSize algo(file_paths.begin(), file_paths.end(), file_paths.size());
       auto [f] = tp.transform_reduce(file_paths.begin(), file_paths.end(),
                                  std::unordered_map<std::string, unsigned>{},
                                  table_update,
                                  word_map<line_size>,
-                                 thp::partitioner(file_paths.begin(), file_paths.end(), algo)
+                                 algo
                                 );
       auto ans = f.get();
       cu.now();

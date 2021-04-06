@@ -5,10 +5,10 @@
 
 #include "include/worker_pool.hpp"
 #include "include/scheduler.hpp"
-#include "include/algos/schedule_algos.hpp"
-#include "include/algos/maxlen.hpp"
-#include "include/algos/first_available.hpp"
-#include "include/algos/fair_share.hpp"
+#include "include/algos/scheduling/schedule_algos.hpp"
+#include "include/algos/scheduling/maxlen.hpp"
+#include "include/algos/scheduling/first_available.hpp"
+#include "include/algos/scheduling/fair_share.hpp"
 
 namespace thp {
 task_scheduler::task_scheduler()

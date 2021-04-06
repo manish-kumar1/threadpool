@@ -3,7 +3,7 @@
 
 #include <thread>
 
-#include "include/algos/schedule_algos.hpp"
+#include "include/algos/scheduling/schedule_algos.hpp"
 #include "include/statistics.hpp"
 #include "include/task_queue.hpp"
 

@@ -15,6 +15,7 @@
 #include <cassert>
 
 #include "include/partitioner.hpp"
+#include "include/algos/partitioner/equal_size.hpp"
 #include "include/util.hpp"
 #include "include/jobq.hpp"
 #include "include/scheduler.hpp"
@@ -126,7 +127,7 @@ public:
     std::input_iterator I, std::sentinel_for<I> S,
     typename T,
     typename BinaryOp,
-    typename PartAlgo = EqualSizePartAlgo<I,S>
+    typename PartAlgo = partition::EqualSize<I,S>
   >
   requires std::movable<T>
   decltype(auto) reduce(I s, S e, T init, BinaryOp rdc_fn, PartAlgo part_algo) {
@@ -138,7 +139,7 @@ public:
     typename T,
     typename BinaryOp,
     typename UnaryOp,
-    typename PartAlgo = EqualSizePartAlgo<I,S>
+    typename PartAlgo = partition::EqualSize<I,S>
   >
   requires std::movable<T>
   decltype(auto) transform_reduce(I s, S e, T init,

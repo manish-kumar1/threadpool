@@ -100,14 +100,15 @@ public:
           l.lock();
         }
       }
-      if (ne)
-      {
-        std::unique_lock l(wmtx);
-        if (cur_output->empty()) {
-          std::swap(cur_output, old_output);
-          stats.jobq.out.new_tasks = cur_output->size();
-          util::notify_cv(cond_full, stats.jobq.out.new_tasks);
+      if (ne) {
+        {
+          std::unique_lock l(wmtx);
+          if (cur_output->empty()) {
+            std::swap(cur_output, old_output);
+            stats.jobq.out.new_tasks = cur_output->size();
+          }
         }
+        util::notify_cv(cond_full, stats.jobq.out.new_tasks);
       }
 
       //std::cerr << std::this_thread::get_id() << " schedule_fn2: " << pending_tasks << ", " << stats.jobq.out.new_tasks << ", " << ne << ", " << old_output->size() << ", " << stats.jobq.out.new_tasks << std::endl;

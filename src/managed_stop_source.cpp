@@ -2,7 +2,6 @@
  * managed_stop_source.cpp
  *
  *  Created on: Feb 6, 2021
- *      Author: xps33
  */
 
 #include "include/managed_stop_source.hpp"

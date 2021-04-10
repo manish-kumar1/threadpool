@@ -9,14 +9,14 @@ cc_binary(
   visibility = ["//visibility:public"],
 )
 
-cc_binary(
-  name = "usage",
-  srcs  = ["usage.cpp"],
-  copts = copt_flags,
-  deps = ["//:lib_thp"],
-  linkopts = link_flags,
-  visibility = ["//visibility:public"],
-)
+#cc_binary(
+#  name = "usage",
+#  srcs  = ["usage.cpp"],
+#  copts = copt_flags,
+#  deps = ["//:lib_thp"],
+#  linkopts = link_flags,
+#  visibility = ["//visibility:public"],
+#)
 
 cc_binary(
   name = "reduce",
@@ -25,6 +25,7 @@ cc_binary(
   deps = ["//:lib_thp"],
   linkopts = link_flags,
   visibility = ["//visibility:public"],
+  linkstatic = True,
 )
 
 cc_binary(

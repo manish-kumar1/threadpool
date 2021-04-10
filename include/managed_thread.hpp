@@ -29,7 +29,7 @@ struct managed_thread {
 namespace platform {
 
 // a unit of worker
-class thread : public thp::managed_thread {
+class thread final : public thp::managed_thread {
 public:
   template <typename Fn, typename... Args, typename =
 		  std::enable_if_t<std::is_invocable_v<Fn, Args...>>>
@@ -63,19 +63,22 @@ public:
 
   void update_config(const thread_config &new_config) {
     if (!config_)
-      config_.reset(new thread_config(new_config));
+      config_ = std::make_shared<thread_config>(new_config);
 
     config_->apply(this);
   }
 
   std::shared_ptr<configuration> get_config() override {
-    if (!config_) config_.reset(new thread_config());
+    if (!config_) config_ = std::make_shared<thread_config>();
     config_->retrieve(this);
     return config_;
   }
 
   virtual ~thread() {
-    join();
+    try {
+      join();
+    }
+    catch(...) {}
   }
 
 protected:

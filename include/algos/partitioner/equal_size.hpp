@@ -35,10 +35,8 @@ public:
       return state_t(original.end, original.end);
 
     auto dis = std::ranges::distance(prev.end, original.end);
-    if (dis > partition_size)
-      return state_t(prev.end, std::ranges::next(prev.end, partition_size));
-    else
-      return state_t(prev.end, original.end);
+    auto new_end = dis > partition_size ? std::ranges::next(prev.end, partition_size) : original.end;
+    return state_t(prev.end, new_end);
   }
 
   constexpr typename partition_algo<I, S>::state_t begin() {

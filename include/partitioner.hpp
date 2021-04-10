@@ -34,17 +34,17 @@ class partitioner {
       return *this;
     }
 
-    decltype(auto) operator * () { return std::ranges::subrange(m_state.start, m_state.end); } // return original_range | views::take_while(algo->logic())
+    decltype(auto) operator * () { return std::ranges::subrange(m_state.start, m_state.end); }
 
     friend bool operator == (partition_iterator a, partition_iterator b) { return a.m_state == b.m_state; }
   };
 
   public:
-  constexpr explicit partitioner(std::shared_ptr<PartitionAlgoType> part_algo)
-  : algo{std::move(part_algo)}
+  constexpr explicit partitioner(const PartitionAlgoType& part_algo)
+  : algo{std::make_shared<PartitionAlgoType>(part_algo)}
   {}
   inline constexpr decltype(auto) begin() { return partition_iterator(algo, algo->begin()); }
-  inline constexpr decltype(auto) end() { return partition_iterator(algo, algo->end()); }
+  inline constexpr decltype(auto) end()   { return partition_iterator(algo, algo->end()); }
   inline constexpr std::size_t count() const { return algo->count(); }
 };
 

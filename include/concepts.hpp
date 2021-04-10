@@ -17,7 +17,7 @@ concept SimpleTask = std::is_base_of_v<executable, T> &&
   };
 
 template <typename T>
-concept PriorityTask = SimpleTask<T> &&
+concept PriorityTask = std::is_base_of_v<executable, T> &&
   requires {
     typename T::PriorityType;
     requires std::totally_ordered<typename T::PriorityType>;

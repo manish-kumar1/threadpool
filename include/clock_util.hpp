@@ -10,10 +10,13 @@ namespace util {
 template <typename Clock>
 class clock_util {
 public:
-  constexpr explicit clock_util() : s {Clock::now()}, e{Clock::now()} {}
+  constexpr explicit clock_util() : points{}, s{&points[0]}, e{&points[1]}, tmp{&points[2]} {
+    *s = Clock::now();
+    *e = Clock::now();
+  }
 
   constexpr decltype(auto) now() noexcept {
-    tmp = Clock::now();
+    *tmp = Clock::now();
     std::swap(s, e);
     std::swap(tmp, e);
     return *this;
@@ -21,17 +24,16 @@ public:
 
   template<typename T, typename C>
   inline constexpr std::chrono::duration<T, C> last_dur() const {
-    return (e - s);
+    return (*e - *s);
   }
 
   constexpr double get_us() noexcept {
-    std::chrono::duration<double, std::micro> tot = e-s;
+    std::chrono::duration<double, std::micro> tot = *e - *s;
     return tot.count();
   }
 
   constexpr double get_ms() noexcept {
-    std::chrono::duration<double, std::milli> tot = e-s;
-    return tot.count();
+    return get_us()/1000.0f;
   }
 
   constexpr double get_sec() noexcept {
@@ -39,7 +41,8 @@ public:
   }
 
 private:
-  typename Clock::time_point s, e, tmp;
+  std::array<typename Clock::time_point, 3> points;
+  typename Clock::time_point *s, *e, *tmp;
 };
 
 } // namespace util

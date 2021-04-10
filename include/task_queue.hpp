@@ -19,10 +19,8 @@ struct task_queue {
   virtual ~task_queue() = default;
 };
 
-
 //
 // one executable container queue
-// class with mutex, implement custom move constructors, as they are defaulted to delete
 //
 template<typename Prio, typename TaskComp = std::less<comparable_task<Prio>>>
 class priority_taskq : public task_queue {
@@ -40,18 +38,9 @@ class priority_taskq : public task_queue {
   {
     using T = std::remove_cvref_t<decltype(t)>;
 
-    if constexpr (traits::is_unique_ptr<T>::value)                 { return std::move(t); }
-    else if constexpr (traits::is_reference_wrapper<T>::value)     { return std::move(t.get()); }
-    else if constexpr (std::is_base_of_v<executable, T>)           { return std::make_unique<T>(std::move(t)); }
-    else if constexpr (traits::is_container<T>::value) {
-      using DataType = std::decay_t<typename T::value_type>;
-      using TaskType = traits::FindTaskType<DataType>::type;
-      std::vector<std::unique_ptr<TaskType>> tasks;
-      tasks.reserve(t.size());
-      std::ranges::transform(t, std::back_inserter(tasks),
-                           [&](auto&& x) { return to_value_type(x); });
-      return tasks;
-    }
+    if constexpr (traits::is_unique_ptr<T>::value)      { return std::move(t); }
+    else if constexpr (std::is_base_of_v<executable, T>){ return std::make_unique<T>(std::move(t)); }
+    else if constexpr (traits::is_container<T>::value)  { return std::move(t); }
     else {
       static_assert("type is not supported");
     }
@@ -83,7 +72,7 @@ public:
     return *this;
   }
 
-  std::size_t pop(std::unique_ptr<executable>& t) override {
+  constexpr std::size_t pop(std::unique_ptr<executable>& t) override {
     std::unique_lock l(mu);
     if (tasks.empty()) return 0;
 
@@ -99,7 +88,7 @@ public:
 	  return 1;
   }
 
-  std::size_t pop_n(std::deque<std::unique_ptr<executable>>& out, std::size_t n) {
+  constexpr std::size_t pop_n(std::deque<std::unique_ptr<executable>>& out, std::size_t n) {
     std::unique_lock l(mu);
     if (tasks.empty()) return 0;
 
@@ -114,19 +103,19 @@ public:
       tasks.erase(tasks.begin(), std::next(tasks.begin(), n));
       std::ranges::make_heap(tasks, value_compare());
     }
-    return n;
+    return 0;
   }
 
   template<typename... C>
-  std::size_t put(C&&... c) {
+  constexpr std::size_t put(C&&... c) {
     std::unique_lock l(mu);
     std::size_t ret = 0;
     ((ret += _insert(to_value_type(std::forward<C>(c)))), ...);
     return ret;
   }
 
-  std::size_t len() const override {
-    std::shared_lock l(mu);
+  constexpr std::size_t len() const override {
+    std::unique_lock l(mu);
     return tasks.size();
   }
 
@@ -136,7 +125,7 @@ public:
   }
 
 protected:
-  std::size_t _insert(value_type&& p) {
+  constexpr std::size_t _insert(value_type&& p) {
     tasks.emplace_back(std::move(p));
     if constexpr (!std::is_same_v<void, Prio>) {
       std::ranges::push_heap(tasks, value_compare());
@@ -145,9 +134,11 @@ protected:
   }
 
   template<typename T>
-  std::size_t _insert(std::vector<T>&& c) {
+  constexpr std::size_t _insert(std::vector<T>&& c) {
     auto n = c.size();
-    tasks.insert(tasks.end(), std::make_move_iterator(c.begin()), std::make_move_iterator(c.end()));
+    std::ranges::for_each(c, [&](auto&& t) {
+      _insert(to_value_type(std::move(t)));
+    });
 
     if constexpr (!std::is_same_v<void, Prio>) {
       std::ranges::make_heap(tasks, value_compare());
@@ -155,7 +146,7 @@ protected:
     return n;
   }
 
-  mutable std::shared_mutex mu; // all mutex type are neither copyable nor movable
+  mutable std::mutex mu;
   std::deque<value_type> tasks;
 };
 

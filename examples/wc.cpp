@@ -15,7 +15,6 @@
 namespace fs = std::filesystem;
 namespace rng = std::ranges;
 
-template<std::size_t N>
 auto word_map = [](const std::string& file_path) {
     std::ifstream ifs{file_path};
     return std::accumulate(std::istream_iterator<std::string>(ifs),
@@ -37,10 +36,12 @@ decltype(auto) most_common(I s, S e, const Size n, Comp comp = Comp{})
   std::vector<value_type> ans;
   ans.reserve(n);
 
-  std::copy_n(s, n, std::back_inserter(ans));
+  auto N = std::min(Size(std::distance(s, e)), n);
+
+  std::copy_n(s, N, std::back_inserter(ans));
   std::make_heap(ans.begin(), ans.end(), comp);
 
-  std::for_each(std::next(s, n), e, [&](const auto& p) mutable {
+  std::for_each(std::next(s, N), e, [&](const auto& p) mutable {
     if (comp(p, ans.front())) {
       std::pop_heap(ans.begin(), ans.end(), comp);
       ans.back() = p;
@@ -107,28 +108,28 @@ int main(int argc, const char* const argv[])
     };
 
     {
-      cu.now();
-      auto ans = std::transform_reduce(std::execution::seq,
-                            file_paths.begin(), file_paths.end(),
-                            std::unordered_map<std::string, unsigned>{},
-                            table_update,
-                            word_map<line_size>);
-      cu.now();
-      print_result("std", ans);
-    }
-    {
       thp::threadpool tp;
       cu.now();
       thp::partition::EqualSize algo(file_paths.begin(), file_paths.end(), file_paths.size());
       auto [f] = tp.transform_reduce(file_paths.begin(), file_paths.end(),
                                  std::unordered_map<std::string, unsigned>{},
                                  table_update,
-                                 word_map<line_size>,
+                                 word_map,
                                  algo
                                 );
       auto ans = f.get();
       cu.now();
       print_result("thp", ans);
+    }
+    {
+      cu.now();
+      auto ans = std::transform_reduce(std::execution::seq,
+                            file_paths.begin(), file_paths.end(),
+                            std::unordered_map<std::string, unsigned>{},
+                            table_update,
+                            word_map);
+      cu.now();
+      print_result("std", ans);
     }
   } catch(std::exception& e) {
     std::cerr << "Exception: " << e.what() << std::endl;

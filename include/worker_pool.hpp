@@ -11,7 +11,7 @@
 
 namespace thp {
 
-class worker_pool{
+class worker_pool final {
 public:
   explicit worker_pool()
       : mu_{}

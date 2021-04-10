@@ -26,10 +26,10 @@
 #include "include/task_factory.hpp"
 #include "include/all_priority_types.hpp"
 #include "include/concepts.hpp"
+#include "include/job_type.hpp"
 
 namespace thp {
-
-class threadpool {
+class threadpool final {
   using TaskQueueTupleType = TaskQueueTuple<AllPriorityTupleType>::type;
 
 public:
@@ -50,6 +50,17 @@ public:
     return std::make_tuple(jobq_.schedule_task(args)...);
   }
 
+  template<typename T>
+  constexpr decltype(auto) run(job<T>& work) {
+    worker_pool workers;
+    workers.start_n_thread(work.num_workers(), &job<T>::worker_fn, &work);
+    //work.wait();
+    std::deque<std::future<typename T::ReturnType>> ret;
+    work.futures(std::back_inserter(ret));
+    for(auto&& f: ret) f.wait();
+    return ret;
+  }
+
   template <typename Clock> 
   constexpr decltype(auto) run_for(typename Clock::duration dur) {}
 
@@ -68,6 +79,9 @@ public:
   constexpr decltype(auto) sort(I start, S end, Comp cmp = {}, Proj prj = {}) {
 
     std::function<std::tuple<I,S>(I, S, Comp, Proj)> tp_sort = [this, &tp_sort](I s, S e, Comp comp, Proj proj) {
+      using Ret = std::tuple<I, S>;
+      using Task = simple_task<Ret>;
+
       const std::size_t len = std::ranges::distance(s, e);
       if (len <= Static::stl_sort_cutoff()) {
         std::ranges::sort(s, e, comp, proj);
@@ -84,14 +98,16 @@ public:
             return std::make_tuple(s1, e2);
           };
 
-          std::vector<simple_task<std::tuple<I, S>>> merge_tasks;
+          std::vector<Task> merge_tasks;
           const auto n = fut_vec.size();
           merge_tasks.reserve(n % 2 != 0 ? (1 + n/2) : n/2);
 
           for (size_t i = 0; i+1 < n; i += 2)
             merge_tasks.emplace_back(make_task(one_merge, std::move(fut_vec[i]), std::move(fut_vec[i+1])));
 
-          auto next_fut_vec = jobq_.schedule_task(std::move(merge_tasks));
+          //auto next_fut_vec = jobq_.schedule_task(std::move(merge_tasks));
+          auto merge_job = job<Task>(std::move(merge_tasks)).num_workers(std::clamp(n/2, 1lu, 16lu));
+          auto next_fut_vec = this->run(merge_job);
           if (n % 2 != 0) {
             next_fut_vec.emplace_back(std::move(fut_vec.back()));
             fut_vec.pop_back();
@@ -103,17 +119,20 @@ public:
 
         unsigned part_len = static_cast<unsigned>(len/std::thread::hardware_concurrency());
         auto step = std::clamp(part_len, 2u, Static::stl_sort_cutoff());
-        std::vector<simple_task<std::tuple<I, S>>> tasks;
+        std::vector<Task> tasks;
         tasks.reserve(std::ceil(len/step));
         for(std::size_t i = 0; i < len; i += step)
           tasks.emplace_back(make_task(tp_sort, s+i, s+std::min(i+step, len), comp, proj));
 
-        auto futs = jobq_.schedule_task(std::move(tasks));
+        auto works = job<Task>(std::move(tasks)).num_workers(max_threads_);
+        auto futs = this->run(works);
+        
+        //auto futs = jobq_.schedule_task(std::move(tasks));
         while (futs.size() > 1) {
           futs = level_merge_task(std::move(futs));
         }
 
-        std::ranges::for_each(futs, [](auto&& f) { f.get(); });
+        std::ranges::for_each(futs, [](auto&& f) { f.wait(); });
       }
       return std::make_tuple(s, e);
     };
@@ -130,19 +149,22 @@ public:
     typename PartAlgo = partition::EqualSize<I,S>
   >
   requires std::movable<T>
-  decltype(auto) reduce(I s, S e, T init, BinaryOp rdc_fn, PartAlgo part_algo) {
-    return transform_reduce(s, e, std::move(init), rdc_fn, std::identity(), part_algo);
+  constexpr decltype(auto) reduce(I s, S e, T init, BinaryOp rdc_fn, PartAlgo part_algo) {
+    return this->transform_reduce(s, e, std::move(init),
+                  std::forward<BinaryOp>(rdc_fn),
+                  std::identity(),
+                  std::forward<PartAlgo>(part_algo));
   }
 
   template <
     std::input_iterator I, std::sentinel_for<I> S,
     typename T,
     typename BinaryOp,
-    typename UnaryOp,
+    typename UnaryOp = std::identity,
     typename PartAlgo = partition::EqualSize<I,S>
   >
   requires std::movable<T>
-  decltype(auto) transform_reduce(I s, S e, T init,
+  constexpr decltype(auto) transform_reduce(I s, S e, T init,
                                   BinaryOp rdc_fn, UnaryOp tr_fn,
                                   PartAlgo part_algo) {
     auto transform_reduce_fn = [=](auto&& subrng) {
@@ -151,21 +173,24 @@ public:
 
     return enqueue([=, this] () mutable {
       std::vector<simple_task<T>> tasks;
-      partitioner<PartAlgo> partitions(std::make_shared<PartAlgo>(part_algo));
+      partitioner partitions(part_algo);
       tasks.reserve(partitions.count());
 
-      //std::for_each(partitions.begin(), partitions.end(), [&](auto&& subrng) { tasks.emplace_back(make_task(transform_reduce_fn, subrng)); });
+      //std::for_each(partitions.begin(), partitions.end(), 
+      //    [&](auto&& subrng) { tasks.emplace_back(make_task(transform_reduce_fn, subrng)); });
       for(auto&& sr : partitions) tasks.emplace_back(make_task(transform_reduce_fn, sr));
 
-      auto futs = jobq_.schedule_task(std::move(tasks));
+      //auto futs = jobq_.schedule_task(std::move(tasks));
+      auto work = job<simple_task<T>>(std::move(tasks)).num_workers(std::clamp(partitions.count(), 1lu, 24lu));
+      auto futs = this->run(work);
       return std::transform_reduce(futs.begin(), futs.end(), init, rdc_fn,
                                    [](auto&& fut) mutable { return std::move(fut.get()); });
     });
   }
 
   template<std::input_iterator I, std::sentinel_for<I> S, typename Fn>
-  decltype(auto) for_each(I s, S e, Fn fn) {
-    return std::ranges::for_each(s, e, [&](auto&& x) { enqueue(fn, x); });
+  constexpr decltype(auto) for_each(I s, S e, Fn fn) {
+    return std::ranges::for_each(s, e, [fn, this](auto&& x) { return enqueue(fn, x); });
   }
 
   ~threadpool();

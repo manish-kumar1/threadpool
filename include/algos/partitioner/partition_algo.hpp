@@ -14,8 +14,8 @@ struct partition_algo {
   typedef struct algo_state {
     I start;
     S end;
-    explicit algo_state(I s, S e) : start(s), end(e) {}
-    bool operator == (const algo_state& rhs) {
+    constexpr explicit algo_state(I s, S e) : start(s), end(e) {}
+    constexpr bool operator == (const algo_state& rhs) {
       return (start == rhs.start) && (end == rhs.end);
     }
   } state_t;

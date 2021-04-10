@@ -63,6 +63,9 @@ template <typename... T>
 struct is_vector<std::vector<T...>> : std::true_type {};
 
 template <typename... T>
+struct is_linked_list<std::list<T...>> : std::true_type {};
+
+template <typename... T>
 struct is_container : std::integral_constant<bool, is_vector<T...>::value> {};
 
 template<typename> struct is_tuple : std::false_type {};

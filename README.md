@@ -1,5 +1,5 @@
-# threadpool
-A threadpool implementation with configurable job queue, scheduling policies, and data partitioning options.
+# Workflow
+A high throughput threadpool implementation with configurable job queue, scheduling policies, and data partitioning options.
 
 # Basics
   Consists of job queues with configurable worker threads. Worker threads can be configured with platform specific parameters, which are stored as jobqueue configuration parameters.
@@ -8,8 +8,6 @@ A threadpool implementation with configurable job queue, scheduling policies, an
 ## Scheduling algorithm
 
   Threadpool has a helper scheduler class, which can be configured with specific/configurable scheduling algorithm when created.
-  These scheduling functions assign/arrange worker threads to task queues according to the programmed logic. One can create create their own scheduling rules
-  to maximize throughput or needs.
 
 # Task type 
   There are two class of tasks, simple_task and priority_task. Priority tasks are arranged by its priority and executed accordingly,
@@ -32,7 +30,7 @@ A threadpool implementation with configurable job queue, scheduling policies, an
 ```
   git clone https://github.com/manish-kumar1/threadpool.git
   cd threadpool
-  bazel build //...
+  bazel build examples:all
   bazel run examples:usage
   bazel run examples:reduce
 ```

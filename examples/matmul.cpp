@@ -15,8 +15,6 @@
 namespace rng = std::ranges;
 
 using Val = int;
-//constexpr size_t N = 256*4;
-//using Matrix = std::array<std::array<Val, N>, N>;
 using Matrix = std::vector<std::vector<Val>>;
 
 Matrix mat1, mat2, ans1, ans2;
@@ -95,37 +93,19 @@ decltype(auto) matmul_tp(const Matrix& mat1,
         tp.schedule(thp::make_task(mul, i, std::min(n, i+step), j, std::min(n, j+step)));
       }
   }
-  {
-    std::vector<std::shared_ptr<thp::simple_task<void>>> tasks;
-    tasks.reserve(n);
-    for(auto i = 0; i < n; ++i)
-      tasks.emplace_back(thp::make_task(mul, i, 0, n));
-
-      auto [futs] = tp.schedule(std::move(tasks));
-  }
-  //mul2(0, n, 256);
-  {
-    std::vector<std::shared_ptr<thp::simple_task<void>>> tasks;
-    size_t step = n/16;
-    for (size_t i = 0; i < n; i += step)
-      tasks.emplace_back(thp::make_task(mul4, i, std::min(n, i+step)));
-    auto [futs] = tp.schedule(std::move(tasks));
-  }
 #endif
   {
     auto [futs] = mul3(0, n, 1024u);
+    std::ranges::for_each(futs, [](auto&& f) { f.wait(); });
   }
-  tp.drain();
 }
 
 int main(int argc, const char* const argv[])
 {
-  // Initialize Google's logging library.
-  //google::InitGoogleLogging(argv[0]);
-
   size_t N = argc > 1 ? std::stoi(argv[1]) : 1024u;
   size_t step = argc > 2 ? std::stoi(argv[2]) : 128;
-  bool verify = argc > 3 ? true : false;
+  size_t workers = argc > 3 ? std::stoi(argv[3]) : std::thread::hardware_concurrency();
+  bool verify = argc > 4 ? true : false;
 
   try {
     thp::util::clock_util<std::chrono::steady_clock> cu;
@@ -154,7 +134,7 @@ int main(int argc, const char* const argv[])
         //rng::copy(row2, std::ostream_iterator<Val>(std::cerr, ", ")); std::cerr << std::endl;
       }
       {
-        thp::threadpool tp;
+        thp::threadpool tp(workers);
         cu.now();
         matmul_tp(mat1, mat2, ans1, n, tp);
         cu.now();

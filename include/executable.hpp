@@ -1,6 +1,8 @@
 #ifndef EXECUTABLE_HPP_
 #define EXECUTABLE_HPP_
 
+#include <ostream>
+
 namespace thp {
 
 // task interface

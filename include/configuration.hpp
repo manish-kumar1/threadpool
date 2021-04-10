@@ -54,13 +54,13 @@ private:
 } // namespace platform
 
 namespace Static {
-  constexpr inline const decltype(auto) shutdown_grace_period()    { return std::chrono::milliseconds(2000); }
-  constexpr inline const decltype(auto) stats_collection_period()  { return std::chrono::milliseconds(1000); }
-  constexpr inline const decltype(auto) schedule_request_timeout() { return std::chrono::milliseconds(10);   }
-  constexpr inline const decltype(auto) scheduler_tick()           { return std::chrono::microseconds(60);   }
-  constexpr inline const decltype(auto) per_queue_capacity()       { return 16*1024;                         }
-  constexpr inline const decltype(auto) queue_table_capacity()     { return 1024;                            }
-  constexpr inline const decltype(auto) stl_sort_cutoff()          { return 1000000u;                        }
+  constexpr inline decltype(auto) shutdown_grace_period()    { return std::chrono::milliseconds(2000); }
+  constexpr inline decltype(auto) stats_collection_period()  { return std::chrono::milliseconds(1000); }
+  constexpr inline decltype(auto) schedule_request_timeout() { return std::chrono::milliseconds(10);   }
+  constexpr inline decltype(auto) scheduler_tick()           { return std::chrono::microseconds(10);   }
+  constexpr inline decltype(auto) per_queue_capacity()       { return 16*1024;                         }
+  constexpr inline decltype(auto) queue_table_capacity()     { return 1024;                            }
+  constexpr inline decltype(auto) stl_sort_cutoff()          { return 16*1024*1024u;                    }
 } // namespace Static
 
 } // namespace thp

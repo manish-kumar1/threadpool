@@ -9,7 +9,6 @@
 #include <compare>
 
 #include "include/executable.hpp"
-//#include "include/concepts.hpp"
 #include "include/register_types.hpp"
 
 namespace thp {
@@ -81,7 +80,7 @@ public:
   constexpr std::ostream& info(std::ostream& oss) override {
     return oss;
   }
-};
+} __attribute__((packed, aligned(64)));
 
 template<typename T>
 using simple_task  = priority_task<T, void>;

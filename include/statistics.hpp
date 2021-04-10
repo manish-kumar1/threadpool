@@ -12,6 +12,7 @@
 #include "include/all_priority_types.hpp"
 
 namespace thp {
+//namespace stats {
 
 struct workerpool_stats {
   std::size_t num_threads;
@@ -43,8 +44,9 @@ struct statistics {
   std::chrono::system_clock::time_point ts;
   struct jobq_stats jobq;
   struct workerpool_stats pool;
-};
+} __attribute__((aligned(4)));
 
+//} // namespace stats
 } // namespace thp
 
 #endif // STATISTICS_HPP__

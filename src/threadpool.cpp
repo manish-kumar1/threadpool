@@ -23,9 +23,6 @@ threadpool::threadpool(unsigned max_threads)
   , max_threads_{max_threads}
 {
   std::lock_guard<std::mutex> lck(mu_);
-  auto worker_conf = platform::thread_config();
-
-  worker_pool_.update_config(worker_conf);
   worker_pool_.start_n_thread(max_threads_, &job_queue<TaskQueueTupleType>::worker_fn, &jobq_);
 
   managers_.start_thread(&job_queue<TaskQueueTupleType>::schedule_fn, &jobq_);
@@ -33,7 +30,6 @@ threadpool::threadpool(unsigned max_threads)
 }
 
 void threadpool::print(std::ostream& oss, managed_stop_token st) {
-//  statistics stats;
   std::vector<unsigned> worker_utilization;
 
   for (;;) {
@@ -73,7 +69,7 @@ void threadpool::print(std::ostream& oss, managed_stop_token st) {
   }
 }
 
-void threadpool::drain() { jobq_.drain(); }
+//void threadpool::drain() { jobq_.drain(); }
 
 void threadpool::shutdown() {
   worker_pool_.shutdown();

@@ -14,7 +14,6 @@
 
 template<typename Data>
 decltype(auto) reduce_min(const Data& data, thp::threadpool& tp) {
-  //std::size_t step = std::clamp(static_cast<unsigned>(data.size()/std::thread::hardware_concurrency()), 100000u, 2500000u); //250000; // tune it for your data size
   std::size_t num_partitions = std::clamp(data.size()/100000u, std::size_t(1), data.size());
   thp::partition::EqualSize algo(data.cbegin(), data.cend(), num_partitions);
 
@@ -53,7 +52,7 @@ int main(int argc, const char* const argv[])
   bool use_stl = argc > 3;
 
   std::locale::global(std::locale(""));
-  auto old = std::cerr.imbue(std::locale(""));
+  auto old = std::cout.imbue(std::locale(""));
 
   thp::util::clock_util<std::chrono::steady_clock> cu;
   try {
@@ -64,7 +63,7 @@ int main(int argc, const char* const argv[])
     data.reserve(n);
     std::generate_n(std::back_inserter(data), n, [&] { return dis(engine); });
     cu.now();
-    std::cerr << "data generation (" << data.size() << "): " << cu.get_ms() << " ms" << std::endl;
+    std::cout << "data generation (" << data.size() << "): " << cu.get_ms() << " ms\n";
     if (use_stl)
     {
       cu.now();
@@ -75,15 +74,23 @@ int main(int argc, const char* const argv[])
                                       std::identity()
                                       );
       cu.now();
-      std::cerr << "stl(" << data.size() << "): " << cu.get_ms() << " ms" << ", ans = " << smin << std::endl;
+      std::cout << "std::reduce(" << data.size() << "): " << cu.get_ms() << " ms" << ", ans = " << smin << std::endl;
+      cu.now();
+      smin = std::transform_reduce(
+                                      data.cbegin(), data.cend(),
+                                      std::numeric_limits<int>::max(),
+                                      [](auto&& a, auto&& b) { return std::min(a, b); },
+                                      std::identity()
+                                      );
+      cu.now();
+      std::cout << "std::reduce(" << data.size() << "): " << cu.get_ms() << " ms" << ", ans = " << smin << std::endl;
     }
-    else
     {
       thp::threadpool tp(workers);
       auto tmin = reduce_min(data, std::ref(tp));    
       cu.now();
       //std::cerr << std::format("thp({}): {} ms, ans = {}\n", data.size(), cu.get_ms(), tmin);
-      std::cerr << "thp(" << data.size() << "): " << cu.get_ms() << " ms" << ", ans = " << tmin << std::endl;
+      std::cout << "thp::reduce(" << data.size() << "): " << cu.get_ms() << " ms" << ", ans = " << tmin << std::endl;
     }
   } catch(std::exception& ex) {
     std::cerr << "main: Exception: " << ex.what() << std::endl;

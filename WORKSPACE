@@ -47,5 +47,5 @@ git_repository(
 new_local_repository(
   name = "spdlog",
   path = "external/spdlog/",
-  build_file = "external/spdlog/spdlog.BUILD"
+  build_file = "external/spdlog.BUILD"
 )

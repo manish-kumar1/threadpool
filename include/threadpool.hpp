@@ -176,8 +176,6 @@ public:
       partitioner partitions(part_algo);
       tasks.reserve(partitions.count());
 
-      //std::for_each(partitions.begin(), partitions.end(), 
-      //    [&](auto&& subrng) { tasks.emplace_back(make_task(transform_reduce_fn, subrng)); });
       for(auto&& sr : partitions) tasks.emplace_back(make_task(transform_reduce_fn, sr));
 
       //auto futs = jobq_.schedule_task(std::move(tasks));

@@ -18,21 +18,19 @@ A high throughput threadpool implementation with configurable job queue, schedul
 ```
   There are convenient APIs to create task, e.g.
 ```
-  auto p0 = thp::simple_task<int>(print_prime, 10);
+  auto p0 = thp::simple_task<int>(print_prime, 42);
   auto p1 = thp::simple_task<int, float>(print_prime, 42); p1.set_priority(4.2f);
 ```
 
 # Build
-  Threadpool uses bazel to build workspace and maintain external depenencies, e.g. gtest, glog.
-  Additionally, to see benchmarks in examples directory, stl libraries with parallel execution support needs to
-  be installed on the system. For GCC >= 9.1, stl parallel algorithms have support for intel tbb library on Linux.
+  Threadpool uses bazel to build workspace and maintain external depenencies, e.g. gtest, glog, spdlog.
+  Additionally, see benchmarks in examples directory.
 
 ```
   git clone https://github.com/manish-kumar1/threadpool.git
   cd threadpool
   bazel build examples:all
-  bazel run examples:usage
-  bazel run examples:reduce
+  bazel run examples:sort
 ```
   
 # example Usage
@@ -51,7 +49,6 @@ A high throughput threadpool implementation with configurable job queue, schedul
   auto [fu0, fut1] = tp.schedule(p0, p1);
   auto futs = tp.schedule(tasks);
 
-  tp.drain();
   tp.shutdown();
 
 ```

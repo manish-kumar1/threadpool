@@ -26,7 +26,7 @@ decltype(auto) reduce_min(const Data& data, thp::threadpool& tp) {
   return f.get();    
 }
 
-// faster than mt19937 but not very random
+// faster than mt19937 but not very random from stackoverflow
 static unsigned long x=123456789, y=362436069, z=521288629;
 unsigned long xorshf96(void) {          //period 2^96-1
 unsigned long t;
